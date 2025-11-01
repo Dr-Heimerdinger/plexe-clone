@@ -7,6 +7,7 @@ when all necessary information has been gathered.
 """
 
 import logging
+import os
 
 from smolagents import ToolCallingAgent, LiteLLMModel
 
@@ -28,7 +29,7 @@ class ConversationalAgent:
 
     def __init__(
         self,
-        model_id: str = "anthropic/claude-sonnet-4-20250514",
+        model_id: str | None = None,
         verbose: bool = False,
     ):
         """
@@ -38,7 +39,30 @@ class ConversationalAgent:
             model_id: Model ID for the LLM to use for conversation
             verbose: Whether to display detailed agent logs
         """
-        self.model_id = model_id
+        # Choose model id with this precedence:
+        # 1. explicit `model_id` argument
+        # 2. env var `PLEXE_CONVERSATIONAL_MODEL`
+        # 3. automatic selection based on available API keys
+        #    - GEMINI -> gemini/gemini-2.5-flash
+        #    - OPENAI -> openai/gpt-4o-mini
+        #    - ANTHROPIC -> anthropic/claude-sonnet-4-20250514
+        # 4. fallback to anthropic default
+        env_model = os.environ.get("PLEXE_CONVERSATIONAL_MODEL")
+
+        if model_id:
+            self.model_id = model_id
+        elif env_model:
+            self.model_id = env_model
+        else:
+            # Auto-detect from available API keys
+            if os.environ.get("GEMINI_API_KEY"):
+                self.model_id = "gemini/gemini-2.5-flash"
+            elif os.environ.get("OPENAI_API_KEY"):
+                self.model_id = "openai/gpt-4o-mini"
+            elif os.environ.get("ANTHROPIC_API_KEY"):
+                self.model_id = "anthropic/claude-sonnet-4-20250514"
+            else:
+                self.model_id = "anthropic/claude-sonnet-4-20250514"
         self.verbose = verbose
 
         # Set verbosity level

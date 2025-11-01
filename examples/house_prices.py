@@ -28,15 +28,22 @@ from plexe.callbacks import MLFlowCallback
 # Note: for conciseness we leave the input schema empty and let plexe infer it
 model = ModelBuilder(
     provider=ProviderConfig(
-        default_provider="openai/gpt-4o",
-        orchestrator_provider="anthropic/claude-sonnet-4-20250514",
-        research_provider="openai/gpt-4o",
-        engineer_provider="anthropic/claude-3-7-sonnet-20250219",
-        ops_provider="anthropic/claude-3-7-sonnet-20250219",
-        tool_provider="openai/gpt-4o",
+        # default_provider="openai/gpt-4o",
+        # orchestrator_provider="anthropic/claude-sonnet-4-20250514",
+        # research_provider="openai/gpt-4o",
+        # engineer_provider="anthropic/claude-3-7-sonnet-20250219",
+        # ops_provider="anthropic/claude-3-7-sonnet-20250219",
+        # tool_provider="openai/gpt-4o",
+        default_provider="gemini/gemini-2.5-flash",
+        orchestrator_provider="gemini/gemini-2.5-flash",
+        research_provider="gemini/gemini-2.5-flash",
+        engineer_provider="gemini/gemini-2.5-flash",
+        ops_provider="gemini/gemini-2.5-flash",
+        tool_provider="gemini/gemini-2.5-flash",
     ),
     verbose=False,
 )
+
 
 # Step 2: Build the model using the training dataset
 # 2B: Build the model with the dataset

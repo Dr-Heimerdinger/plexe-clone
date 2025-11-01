@@ -125,15 +125,31 @@ def initiate_model_build(
         from plexe.model_builder import ModelBuilder
 
         # Create ModelBuilder instance with loaded DataFrames
+        # model_builder = ModelBuilder(
+        #     provider=ProviderConfig(
+        #         default_provider="openai/gpt-4o",
+        #         orchestrator_provider="anthropic/claude-3-7-sonnet-20250219",
+        #         research_provider="openai/gpt-4o",
+        #         engineer_provider="anthropic/claude-sonnet-4-20250514",
+        #         ops_provider="anthropic/claude-sonnet-4-20250514",
+        #         tool_provider="openai/gpt-4o",
+        #     ),
+        # )
+
+        gemini_model = "gemini/gemini-2.5-flash"  # or your specific Gemini model
+
         model_builder = ModelBuilder(
             provider=ProviderConfig(
-                default_provider="openai/gpt-4o",
-                orchestrator_provider="anthropic/claude-3-7-sonnet-20250219",
-                research_provider="openai/gpt-4o",
-                engineer_provider="anthropic/claude-sonnet-4-20250514",
-                ops_provider="anthropic/claude-sonnet-4-20250514",
-                tool_provider="openai/gpt-4o",
+                # Use Gemini for all roles since it's our only available provider
+                default_provider=gemini_model,
+                orchestrator_provider=gemini_model,
+                research_provider=gemini_model,
+                engineer_provider=gemini_model,
+                ops_provider=gemini_model,
+                tool_provider=gemini_model,
             ),
+            # Add working_dir to ensure model artifacts are saved
+            working_dir="./workdir/chat-session/",
         )
 
         # Start the build process
