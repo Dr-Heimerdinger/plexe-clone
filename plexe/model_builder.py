@@ -36,7 +36,7 @@ class ModelBuilder:
 
     def __init__(
         self,
-        provider: str | ProviderConfig = "openai/gpt-4o-mini",
+        provider: str | ProviderConfig = "gemini/gemini-2.5-flash",
         verbose: bool = False,
         distributed: bool = False,
         working_dir: Optional[str] = None,
@@ -95,6 +95,12 @@ class ModelBuilder:
         # Clear and use singleton object registry for this build
         object_registry = ObjectRegistry()
         object_registry.clear()
+
+        if (datasets is None) or (len(datasets) == 0):
+            print("No datasets provided")
+            raise ValueError("At least one dataset must be provided for model building")
+        else:
+            print(f"Building model with {len(datasets)} dataset(s)")
 
         # Validate parameters
         if timeout is None and max_iterations is None:

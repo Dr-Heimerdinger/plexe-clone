@@ -16,6 +16,7 @@ https://kaggle.com/competitions/house-prices-advanced-regression-techniques, 201
 # NOTE: you must download the dataset from Kaggle for this example to work
 
 from datetime import datetime
+import os
 import pandas as pd
 
 import plexe
@@ -48,6 +49,17 @@ model = ModelBuilder(
 # Step 2: Build the model using the training dataset
 # 2B: Build the model with the dataset
 # NOTE: In order to run this example, you will need to download the dataset from Kaggle
+# Make MLflow callback optional. Set ENABLE_MLFLOW=1 in the environment to enable MLflow integration.
+callbacks_list = []
+if os.environ.get("ENABLE_MLFLOW", "0") == "1":
+    callbacks_list = [
+        MLFlowCallback(
+            tracking_uri="http://127.0.0.1:8080",
+            experiment_name=f"house-prices-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        )
+    ]
+
+
 m = model.build(
     datasets=[pd.read_csv("examples/datasets/house-prices-train.csv")],
     intent=(
@@ -61,24 +73,44 @@ m = model.build(
     max_iterations=2,
     timeout=1800,  # 30 minute timeout
     run_timeout=180,
-    callbacks=[
-        MLFlowCallback(
-            tracking_uri="http://127.0.0.1:8080",
-            experiment_name=f"house-prices-{datetime.now().strftime('%Y%m%d-%H%M%S')  }",
-        )
-    ],
+    callbacks=callbacks_list,
 )
 
-# Step 3: Save the model
+# Step 3: Save the model and handle test data transformation
 plexe.save_model(m, "house-prices.tar.gz")
 
-# Step 4: Run a prediction on the built model
+# Step 4: Load and prepare test data
+print("\nPreparing test data for predictions...")
 test_df = pd.read_csv("examples/datasets/house-prices-test.csv").sample(10)
-predictions = pd.DataFrame.from_records([m.predict(x) for x in test_df.to_dict(orient="records")])
 
-# Step 5: print a sample of predictions
+# Get the predictor's transform method if available
+if hasattr(m.predictor, "transform"):
+    print("Found transform method in predictor, applying transformations...")
+    try:
+        # Use the predictor's built-in transform method
+        transformed_test = m.predictor.transform(test_df)
+        predictions = pd.DataFrame.from_records([m.predict(x) for x in transformed_test.to_dict(orient="records")])
+    except Exception as e:
+        print(f"Error during transformation: {str(e)}")
+        print("Falling back to raw predictions (warning: may be incorrect)")
+        predictions = pd.DataFrame.from_records([m.predict(x) for x in test_df.to_dict(orient="records")])
+else:
+    print("No transformation method found, using raw test data (warning: may cause incorrect predictions)")
+    predictions = pd.DataFrame.from_records([m.predict(x) for x in test_df.to_dict(orient="records")])
+
+# Step 5: Print a sample of predictions
+print("\nPredictions:")
 print(predictions)
 
 # Step 6: Print model description
+print("\nModel description:")
 description = m.describe()
 print(description.as_text())
+
+# Optional: Print available model artifacts and generated code
+print("\nGenerated artifacts and code:")
+print(f"Model artifacts: {m.artifacts}")
+print(f"Training code available: {bool(m.trainer_source)}")
+print(f"Feature transformer code available: {bool(m.feature_transformer_source)}")
+print(f"Testing code available: {bool(m.testing_source)}")
+print(f"Dataset splitter code available: {bool(m.dataset_splitter_source)}")

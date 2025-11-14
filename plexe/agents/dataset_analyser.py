@@ -29,7 +29,8 @@ class EdaAgent:
 
     def __init__(
         self,
-        model_id: str = "openai/gpt-4o",
+        # model_id: str = "openai/gpt-4o",
+        model_id: str = "gemini/gemini-2.5-flash",
         verbose: bool = False,
         chain_of_thought_callable: Callable = None,
     ):

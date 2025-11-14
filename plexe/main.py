@@ -4,7 +4,6 @@ Application entry point for using the plexe package as a conversational agent.
 
 import threading
 import time
-import webbrowser
 import logging
 import os
 
@@ -41,7 +40,7 @@ def main():
     # Open the browser
     url = f"http://{host}:{port}"
     logger.info(f"Opening browser at {url}")
-    webbrowser.open(url)
+    # webbrowser.open(url)
 
     # Keep the main thread alive
     try:
