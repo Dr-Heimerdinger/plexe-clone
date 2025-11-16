@@ -1,3 +1,8 @@
+# docker-compose.dev.yml
+# Lightweight compose file for development
+# Use: docker compose -f docker-compose.dev.yml up -d
+# This skips torch installation for faster dev cycles
+
 services:
   postgres:
     image: postgres:15
@@ -12,20 +17,21 @@ services:
       - "5432:5432"
 
   mlflow:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
     restart: unless-stopped
     depends_on:
       - postgres
     environment:
-      # backend store used by mlflow server (connects to the postgres service)
       BACKEND_STORE_URI: ${MLFLOW_BACKEND_STORE_URI:-postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow_db}
-      # default artifact root inside the container (mounted to host ./mlruns)
       ARTIFACT_ROOT: /mlruns
+      MLFLOW_ALLOW_ORIGINS: ${MLFLOW_ALLOW_ORIGINS:-*}
+      MLFLOW_SERVER_ALLOWED_HOSTS: ${MLFLOW_SERVER_ALLOWED_HOSTS:-mlflow,localhost,127.0.0.1,localhost:5000,127.0.0.1:5000,mlflow:5000}
     volumes:
       - ./mlruns:/mlruns
     ports:
       - "5000:5000"
-    command: ["/bin/sh", "-c", "pip install --no-cache-dir mlflow psycopg2-binary && mlflow server --backend-store-uri $BACKEND_STORE_URI --default-artifact-root $ARTIFACT_ROOT --host 0.0.0.0 --port 5000"]
 
   pgadmin:
     image: dpage/pgadmin4:7
@@ -44,14 +50,12 @@ services:
     ports:
       - "3000:80"
     environment:
-      # Frontend serves at http://localhost:3000
-      # The React app connects to backend at /api or /ws via relative URLs
       REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
 
   backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
     depends_on:
       postgres:
@@ -59,16 +63,17 @@ services:
     environment:
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
       MLFLOW_BACKEND_STORE_URI: ${MLFLOW_BACKEND_STORE_URI:-postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow_db}
+      MLFLOW_HTTP_REQUEST_TIMEOUT: 300
     volumes:
       - .:/app
     ports:
       - "8000:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 30s
 
 volumes:
   postgres_data:

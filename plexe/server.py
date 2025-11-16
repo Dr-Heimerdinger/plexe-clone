@@ -22,17 +22,30 @@ app = FastAPI(title="Plexe Assistant", version="1.0.0")
 
 # Serve static files from the ui directory
 ui_dir = Path(__file__).parent / "ui"
-if ui_dir.exists():
+# Prefer a built frontend in `ui/frontend/dist` if present (Vite build output).
+frontend_dist = ui_dir / "frontend" / "dist"
+if frontend_dist.exists():
+    # Serve built static assets from the frontend dist directory
+    app.mount("/static", StaticFiles(directory=str(frontend_dist)), name="static")
+elif ui_dir.exists():
+    # Fallback: serve legacy ui directory (contains index.html and inline JS)
     app.mount("/static", StaticFiles(directory=str(ui_dir)), name="static")
 
 
 @app.get("/")
 async def root():
     """Serve the main HTML page."""
-    index_path = ui_dir / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    return {"error": "Frontend not found. Please ensure plexe/ui/index.html exists."}
+    # Prefer serving the built frontend if available
+    built_index = frontend_dist / "index.html"
+    legacy_index = ui_dir / "index.html"
+
+    if built_index.exists():
+        return FileResponse(str(built_index))
+    if legacy_index.exists():
+        return FileResponse(str(legacy_index))
+    return {
+        "error": "Frontend not found. Please ensure plexe/ui/frontend/dist/index.html or plexe/ui/index.html exists."
+    }
 
 
 @app.websocket("/ws")

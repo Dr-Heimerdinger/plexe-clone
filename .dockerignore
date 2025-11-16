@@ -1,0 +1,49 @@
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.env
+.env.local
+
+# Docker
+.dockerignore
+Dockerfile
+
+# Git
+.git
+.gitignore
+
+# Frontend (don't need for backend build)
+node_modules/
+plexe/ui/frontend/dist/
+npm-debug.log
+
+# Test & coverage
+.pytest_cache
+.coverage
+htmlcov/
+
+# MLflow
+mlruns/
+
+# Misc
+*.log
+.cache/
+workdir/

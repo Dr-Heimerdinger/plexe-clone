@@ -7,6 +7,7 @@ requirements and starting model builds when ready.
 
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -18,6 +19,7 @@ from plexe.internal.common.datasets.adapter import DatasetAdapter
 from plexe.internal.common.datasets.interface import TabularConvertible
 from plexe.internal.common.provider import ProviderConfig
 from plexe.core.object_registry import ObjectRegistry
+from plexe.internal.models.callbacks.mlflow import MLFlowCallback
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +158,24 @@ def initiate_model_build(
         logger.info(f"Initiating model build with intent: {intent}")
         logger.info(f"Using dataset files: {dataset_file_paths}")
 
+        # Set up MLFlow callback if tracking URI is configured
+        callbacks = []
+        mlflow_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+        if mlflow_tracking_uri:
+            callbacks.append(
+                MLFlowCallback(
+                    tracking_uri=mlflow_tracking_uri,
+                    experiment_name=f"chat-session-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+                )
+            )
+
         model = model_builder.build(
             intent=intent,
             datasets=[df],  # Pass actual DataFrames instead of names
             input_schema=input_schema,
             output_schema=output_schema,
             max_iterations=n_solutions_to_try,
+            callbacks=callbacks if callbacks else None,
         )
 
         plexe.save_model(model, "model-from-chat.tar.gz")

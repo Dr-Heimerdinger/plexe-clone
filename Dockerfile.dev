@@ -1,0 +1,44 @@
+# Lightweight Backend Dockerfile (Development)
+# Excludes torch and transformers for faster builds
+# Use this during development with: docker compose -f docker-compose.dev.yml build backend
+
+FROM python:3.11-slim as base
+
+WORKDIR /app
+
+ENV PIP_DEFAULT_TIMEOUT=100 \
+    PIP_RETRIES=5 \
+    PYTHONUNBUFFERED=1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base as deps
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir poetry
+
+COPY pyproject.toml poetry.lock* README.md ./
+
+# Install without torch (torch is optional for development)
+# This runs much faster!
+# Install chatui extras to ensure uvicorn has websocket support
+RUN poetry install --no-interaction --no-ansi --no-root --only main --extras chatui 2>&1 || \
+    (sleep 5 && poetry install --no-interaction --no-ansi --no-root --only main --extras chatui)
+
+FROM deps as app
+
+COPY . .
+
+RUN poetry install --no-interaction --no-ansi --only main --extras chatui
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=30s \
+  CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=2)"
+
+CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
