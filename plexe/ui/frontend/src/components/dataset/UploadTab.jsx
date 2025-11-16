@@ -1,0 +1,118 @@
+import React, { useRef, useState } from 'react'
+import { uploadFiles } from '../../api/client'
+
+export default function UploadTab() {
+    const [files, setFiles] = useState([])
+    const [uploading, setUploading] = useState(false)
+    const [uploadError, setUploadError] = useState(null)
+    const [uploadSuccess, setUploadSuccess] = useState(false)
+    const fileInputRef = useRef(null)
+
+    const handleFileChange = (e) => {
+        const selectedFiles = Array.from(e.target.files)
+        setFiles((prevFiles) => [...prevFiles, ...selectedFiles])
+    }
+
+    const handleUpload = async () => {
+        if (files.length === 0) {
+            setUploadError('Please select files to upload')
+            return
+        }
+
+        setUploading(true)
+        setUploadError(null)
+        setUploadSuccess(false)
+
+        try {
+            const result = await uploadFiles(files)
+            setUploadSuccess(true)
+            setFiles([])
+            setTimeout(() => setUploadSuccess(false), 3000)
+        } catch (error) {
+            console.error('Upload error:', error)
+            setUploadError(error.message || 'Upload failed')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    const removeFile = (index) => {
+        setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index))
+    }
+
+    return (
+        <div className="upload-tab">
+            <div className="upload-area">
+                <div
+                    className="upload-box"
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => {
+                        e.preventDefault()
+                        e.currentTarget.style.borderColor = '#2563eb'
+                    }}
+                    onDragLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#ddd'
+                    }}
+                    onDrop={(e) => {
+                        e.preventDefault()
+                        e.currentTarget.style.borderColor = '#ddd'
+                        const droppedFiles = Array.from(e.dataTransfer.files)
+                        setFiles((prevFiles) => [...prevFiles, ...droppedFiles])
+                    }}
+                >
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                        accept=".csv,.xlsx,.xls,.json,.parquet"
+                    />
+                    <div className="upload-icon">📁</div>
+                    <p className="upload-text">Drag and drop files here or click to browse</p>
+                    <p className="upload-hint">Supported formats: CSV, XLSX, JSON, Parquet</p>
+                </div>
+            </div>
+
+            {uploadError && (
+                <div className="status-message error">
+                    ✕ {uploadError}
+                </div>
+            )}
+
+            {uploadSuccess && (
+                <div className="status-message success">
+                    ✓ Files uploaded successfully!
+                </div>
+            )}
+
+            {files.length > 0 && (
+                <div className="files-list">
+                    <h3>Selected Files ({files.length})</h3>
+                    <ul className="file-items">
+                        {files.map((file, index) => (
+                            <li key={index} className="file-item">
+                                <span className="file-name">📄 {file.name}</span>
+                                <span className="file-size">({(file.size / 1024).toFixed(2)} KB)</span>
+                                <button
+                                    className="remove-btn"
+                                    onClick={() => removeFile(index)}
+                                >
+                                    ✕
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+
+                    <button
+                        className="upload-button"
+                        onClick={handleUpload}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Uploading...' : 'Upload Files'}
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}

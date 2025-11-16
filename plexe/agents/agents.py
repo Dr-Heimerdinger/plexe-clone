@@ -75,7 +75,7 @@ class PlexeAgent:
         self,
         orchestrator_model_id: str = "gemini/gemini-2.5-flash",
         ml_researcher_model_id: str = "gemini/gemini-2.5-flash",
-        ml_engineer_model_id: str = "agemini/gemini-2.5-flash",
+        ml_engineer_model_id: str = "gemini/gemini-2.5-flash",
         ml_ops_engineer_model_id: str = "gemini/gemini-2.5-flash",
         tool_model_id: str = "gemini/gemini-2.5-flash",
         verbose: bool = False,

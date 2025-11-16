@@ -301,3 +301,8 @@ ENV/
 # (uncomment below if you prefer to ignore it)
 # poetry.lock
 **/.claude/settings.local.json
+
+# Data folder
+data/
+data/uploads/
+data/uploads/*

@@ -1,0 +1,19 @@
+# Development Dockerfile for React with Hot Reload
+# Use: docker-compose -f docker-compose.dev.yml up -d
+# This enables hot reload during development
+
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* yarn.lock* ./
+
+# Install dependencies
+RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else npm install; fi
+
+# Expose Vite port
+EXPOSE 3000
+
+# Run Vite dev server with host 0.0.0.0 to allow connections from outside container
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

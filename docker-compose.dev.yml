@@ -45,12 +45,17 @@ services:
   frontend:
     build:
       context: ./plexe/ui/frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
+    volumes:
+      - ./plexe/ui/frontend/src:/app/src
+      - ./plexe/ui/frontend/index.html:/app/index.html
+      - ./plexe/ui/frontend/vite.config.js:/app/vite.config.js
+      - /app/node_modules
     ports:
-      - "3000:80"
+      - "3000:3000"
     environment:
-      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
+      VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:8000}
 
   backend:
     build:
@@ -68,12 +73,7 @@ services:
       - .:/app
     ports:
       - "8000:8000"
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
-    #   start_period: 30s
+
 
 volumes:
   postgres_data:

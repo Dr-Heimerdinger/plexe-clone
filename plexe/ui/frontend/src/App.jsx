@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react'
+import Sidebar from './components/Sidebar'
 import Chat from './components/Chat'
+import Dataset from './components/Dataset'
 
 export default function App() {
     const [wsUrl, setWsUrl] = useState('/ws')
+    const [activePage, setActivePage] = useState('chat')
 
     useEffect(() => {
         // Try to get backend URL from environment or build a sensible default
@@ -26,13 +29,10 @@ export default function App() {
 
     return (
         <div className="app-root">
-            <header className="app-header">
-                <h1>Plexe Assistant</h1>
-                <p className="subtitle">Build ML models through natural conversation</p>
-            </header>
+            <Sidebar activePage={activePage} setActivePage={setActivePage} />
             <main className="app-main">
-                <Chat wsUrl={wsUrl} />
-                {console.log("WebSocket URL:", wsUrl)}
+                {activePage === 'chat' && <Chat wsUrl={wsUrl} />}
+                {activePage === 'dataset' && <Dataset />}
             </main>
         </div>
     )

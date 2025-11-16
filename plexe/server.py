@@ -13,12 +13,26 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from plexe.agents.conversational import ConversationalAgent
+from plexe.api import datasets_router
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Plexe Assistant", version="1.0.0")
+
+# Add CORS middleware for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include dataset API routes
+app.include_router(datasets_router)
 
 # Serve static files from the ui directory
 ui_dir = Path(__file__).parent / "ui"
