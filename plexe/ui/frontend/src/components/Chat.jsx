@@ -50,7 +50,16 @@ export default function Chat({ wsUrl }) {
                 ))}
             </div>
             <div className="composer">
-                <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your message..." />
+                <input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                            send()
+                        }
+                    }}
+                    placeholder="Type your message..."
+                />
                 <button onClick={send}>Send</button>
             </div>
         </div>

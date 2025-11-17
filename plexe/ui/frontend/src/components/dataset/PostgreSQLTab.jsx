@@ -11,6 +11,7 @@ export default function PostgreSQLTab() {
     })
     const [connecting, setConnecting] = useState(false)
     const [connectionStatus, setConnectionStatus] = useState(null)
+    const [tables, setTables] = useState([])
 
     const handleInputChange = (e) => {
         const { name, value } = e.target
@@ -43,6 +44,7 @@ export default function PostgreSQLTab() {
 
     const handleSaveConnection = async () => {
         setConnecting(true)
+        setTables([])
 
         try {
             const data = await savePostgresConnection(connectionForm)
@@ -50,6 +52,9 @@ export default function PostgreSQLTab() {
                 type: 'success',
                 message: 'Connection saved successfully!',
             })
+            if (data.tables) {
+                setTables(data.tables)
+            }
         } catch (error) {
             console.error('Save error:', error)
             setConnectionStatus({
@@ -161,6 +166,17 @@ export default function PostgreSQLTab() {
                 <p>
                     <strong>Username:</strong> {connectionForm.username || 'Not set'}
                 </p>
+
+                {tables.length > 0 && (
+                    <div className="table-list">
+                        <h4>Available Tables</h4>
+                        <ul>
+                            {tables.map((table) => (
+                                <li key={table}>{table}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </div>
         </div>
     )

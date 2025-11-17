@@ -54,6 +54,7 @@ torch = "^2.3.0"
 smolagents = "^1.14.0"
 deprecated = "^1.2.18"
 python-multipart = "^0.0.16"
+psycopg2-binary = "^2.9.9"
 
 # Deep learning dependencies
 transformers = { version = "^4.50.0", optional = true }

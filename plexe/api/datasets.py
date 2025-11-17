@@ -124,16 +124,31 @@ async def save_postgres_connection(config: PostgresConnection):
 
         # Test connection first
         conn = psycopg2.connect(conn_str)
+
+        # Fetch tables from the public schema
+        tables = []
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """
+            )
+            for row in cursor.fetchall():
+                tables.append(row[0])
+
         conn.close()
 
         # TODO: Save to secure config file or database
-        # For now, just return success
+        # For now, just return success and the list of tables
         return {
             "success": True,
             "message": "Connection saved successfully",
             "host": config.host,
             "port": config.port,
             "database": config.database,
+            "tables": tables,
         }
 
     except ImportError:

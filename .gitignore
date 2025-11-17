@@ -299,7 +299,7 @@ ENV/
 
 # Keep poetry.lock for reproducible builds
 # (uncomment below if you prefer to ignore it)
-# poetry.lock
+poetry.lock
 **/.claude/settings.local.json
 
 # Data folder
