@@ -1,5 +1,10 @@
 import React, { useState } from 'react'
-import { testPostgresConnection, savePostgresConnection } from '../../api/client'
+import {
+    testPostgresConnection,
+    executePostgresQuery,
+    combineDatasets,
+} from '../../api/client'
+import QueryResult from './QueryResult'
 
 export default function PostgreSQLTab() {
     const [connectionForm, setConnectionForm] = useState({
@@ -10,8 +15,11 @@ export default function PostgreSQLTab() {
         database: '',
     })
     const [connecting, setConnecting] = useState(false)
+    const [combining, setCombining] = useState(false)
     const [connectionStatus, setConnectionStatus] = useState(null)
-    const [tables, setTables] = useState([])
+    const [combineStatus, setCombineStatus] = useState(null)
+    const [queryResult, setQueryResult] = useState(null)
+    const [showCombine, setShowCombine] = useState(false)
 
     const handleInputChange = (e) => {
         const { name, value } = e.target
@@ -24,9 +32,12 @@ export default function PostgreSQLTab() {
     const handleTestConnection = async () => {
         setConnecting(true)
         setConnectionStatus(null)
+        setQueryResult(null)
+        setShowCombine(false)
+        setCombineStatus(null)
 
         try {
-            const data = await testPostgresConnection(connectionForm)
+            await testPostgresConnection(connectionForm)
             setConnectionStatus({
                 type: 'success',
                 message: 'Connection successful!',
@@ -42,21 +53,23 @@ export default function PostgreSQLTab() {
         }
     }
 
-    const handleSaveConnection = async () => {
+    const handleExecute = async () => {
         setConnecting(true)
-        setTables([])
+        setQueryResult(null)
+        setConnectionStatus(null)
+        setShowCombine(false)
+        setCombineStatus(null)
 
         try {
-            const data = await savePostgresConnection(connectionForm)
+            const data = await executePostgresQuery(connectionForm)
+            setQueryResult(data)
             setConnectionStatus({
                 type: 'success',
-                message: 'Connection saved successfully!',
+                message: 'Query executed successfully!',
             })
-            if (data.tables) {
-                setTables(data.tables)
-            }
+            setShowCombine(true)
         } catch (error) {
-            console.error('Save error:', error)
+            console.error('Execute error:', error)
             setConnectionStatus({
                 type: 'error',
                 message: error.message,
@@ -66,33 +79,58 @@ export default function PostgreSQLTab() {
         }
     }
 
+    const handleCombine = async () => {
+        setCombining(true)
+        setCombineStatus(null)
+        try {
+            await combineDatasets(queryResult.tables, queryResult.relationships)
+            setCombineStatus({
+                type: 'success',
+                message: 'Dataset combination started successfully!',
+            })
+        } catch (error) {
+            console.error('Combine error:', error)
+            setCombineStatus({
+                type: 'error',
+                message: error.message,
+            })
+        } finally {
+            setCombining(false)
+        }
+    }
+
     return (
         <div className="postgres-tab">
             <div className="postgres-form">
-                <h3>PostgreSQL Connection Settings</h3>
+                <h3>PostgreSQL Connection</h3>
+                <p className="form-description">
+                    Enter your database credentials to fetch schema information.
+                </p>
 
-                <div className="form-group">
-                    <label htmlFor="host">Host</label>
-                    <input
-                        id="host"
-                        type="text"
-                        name="host"
-                        value={connectionForm.host}
-                        onChange={handleInputChange}
-                        placeholder="localhost"
-                    />
-                </div>
+                <div className="form-grid">
+                    <div className="form-group">
+                        <label htmlFor="host">Host</label>
+                        <input
+                            id="host"
+                            type="text"
+                            name="host"
+                            value={connectionForm.host}
+                            onChange={handleInputChange}
+                            placeholder="e.g., localhost"
+                        />
+                    </div>
 
-                <div className="form-group">
-                    <label htmlFor="port">Port</label>
-                    <input
-                        id="port"
-                        type="text"
-                        name="port"
-                        value={connectionForm.port}
-                        onChange={handleInputChange}
-                        placeholder="5432"
-                    />
+                    <div className="form-group">
+                        <label htmlFor="port">Port</label>
+                        <input
+                            id="port"
+                            type="text"
+                            name="port"
+                            value={connectionForm.port}
+                            onChange={handleInputChange}
+                            placeholder="e.g., 5432"
+                        />
+                    </div>
                 </div>
 
                 <div className="form-group">
@@ -103,7 +141,7 @@ export default function PostgreSQLTab() {
                         name="database"
                         value={connectionForm.database}
                         onChange={handleInputChange}
-                        placeholder="database_name"
+                        placeholder="e.g., my_database"
                     />
                 </div>
 
@@ -115,7 +153,7 @@ export default function PostgreSQLTab() {
                         name="username"
                         value={connectionForm.username}
                         onChange={handleInputChange}
-                        placeholder="postgres"
+                        placeholder="e.g., postgres"
                     />
                 </div>
 
@@ -131,50 +169,56 @@ export default function PostgreSQLTab() {
                     />
                 </div>
 
-                {connectionStatus && (
-                    <div className={`status-message ${connectionStatus.type}`}>
-                        {connectionStatus.type === 'success' ? '✓' : '✕'} {connectionStatus.message}
-                    </div>
-                )}
-
                 <div className="form-actions">
                     <button
                         className="button secondary"
                         onClick={handleTestConnection}
-                        disabled={connecting}
+                        disabled={connecting || combining}
                     >
                         {connecting ? 'Testing...' : 'Test Connection'}
                     </button>
                     <button
                         className="button primary"
-                        onClick={handleSaveConnection}
-                        disabled={connecting}
+                        onClick={handleExecute}
+                        disabled={connecting || combining}
                     >
-                        {connecting ? 'Saving...' : 'Save Connection'}
+                        {connecting ? 'Executing...' : 'Execute'}
                     </button>
                 </div>
+
+                {connectionStatus && (
+                    <div className={`status-message ${connectionStatus.type}`}>
+                        {connectionStatus.message}
+                    </div>
+                )}
             </div>
 
-            <div className="postgres-info">
-                <h4>Connection Information</h4>
-                <p>
-                    <strong>Current Host:</strong> {connectionForm.host}:{connectionForm.port}
-                </p>
-                <p>
-                    <strong>Database:</strong> {connectionForm.database || 'Not set'}
-                </p>
-                <p>
-                    <strong>Username:</strong> {connectionForm.username || 'Not set'}
-                </p>
-
-                {tables.length > 0 && (
-                    <div className="table-list">
-                        <h4>Available Tables</h4>
-                        <ul>
-                            {tables.map((table) => (
-                                <li key={table}>{table}</li>
-                            ))}
-                        </ul>
+            <div className="postgres-results">
+                {queryResult && (
+                    <QueryResult
+                        tables={queryResult.tables || []}
+                        relationships={queryResult.relationships || []}
+                    />
+                )}
+                {showCombine && (
+                    <div className="combine-section">
+                        <p>
+                            Do you want to combine these tables into a final dataset?
+                        </p>
+                        <button
+                            className="button primary"
+                            onClick={handleCombine}
+                            disabled={combining}
+                        >
+                            {combining ? 'Combining...' : 'Combine Datasets'}
+                        </button>
+                        {combineStatus && (
+                            <div
+                                className={`status-message ${combineStatus.type}`}
+                            >
+                                {combineStatus.message}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
