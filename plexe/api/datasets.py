@@ -1,17 +1,19 @@
-"""
-Dataset API endpoints for Plexe backend
-Handles file uploads, PostgreSQL connections, and dataset management
-"""
-
+import logging
 from pathlib import Path
 from typing import List
+import uuid
 
 from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api", tags=["datasets"])
+from plexe.agents.feature_generator import FeatureGeneratorAgent
 
-# Create uploads directory if it doesn't exist
+# Configure logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+router = APIRouter(prefix="/api", tags=["datasets"])
 UPLOADS_DIR = Path("./data/uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -104,10 +106,10 @@ async def test_postgres_connection(config: PostgresConnection):
         raise HTTPException(status_code=400, detail=f"Connection failed: {str(e)}")
 
 
-@router.post("/postgres/save")
-async def save_postgres_connection(config: PostgresConnection):
+@router.post("/postgres/execute")
+async def execute_postgres_query(config: PostgresConnection):
     """
-    Save PostgreSQL connection configuration
+    Execute a query on a PostgreSQL database
     TODO: Store in database or secure config file
     """
     try:
@@ -138,23 +140,53 @@ async def save_postgres_connection(config: PostgresConnection):
             for row in cursor.fetchall():
                 tables.append(row[0])
 
+        # Fetch relationships from the public schema
+        relationships = []
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    tc.table_name, 
+                    kcu.column_name, 
+                    ccu.table_name AS foreign_table_name,
+                    ccu.column_name AS foreign_column_name
+                FROM 
+                    information_schema.table_constraints AS tc 
+                    JOIN information_schema.key_column_usage AS kcu
+                      ON tc.constraint_name = kcu.constraint_name
+                    JOIN information_schema.constraint_column_usage AS ccu
+                      ON ccu.constraint_name = tc.constraint_name
+                WHERE constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public';
+            """
+            )
+            for row in cursor.fetchall():
+                relationships.append(
+                    {
+                        "table_name": row[0],
+                        "column_name": row[1],
+                        "foreign_table_name": row[2],
+                        "foreign_column_name": row[3],
+                    }
+                )
+
         conn.close()
 
         # TODO: Save to secure config file or database
         # For now, just return success and the list of tables
         return {
             "success": True,
-            "message": "Connection saved successfully",
+            "message": "Query executed successfully",
             "host": config.host,
             "port": config.port,
             "database": config.database,
             "tables": tables,
+            "relationships": relationships,
         }
 
     except ImportError:
         raise HTTPException(status_code=500, detail="psycopg2 not installed. Install with: pip install psycopg2-binary")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to save connection: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to execute query: {str(e)}")
 
 
 @router.get("/datasets")
@@ -202,3 +234,41 @@ async def delete_dataset(dataset_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete dataset: {str(e)}")
+
+
+@router.get("/datasets/{dataset_id}/download")
+async def download_dataset(dataset_id: str):
+    """
+    Download a dataset by ID (filename without extension)
+    """
+    try:
+        for file_path in UPLOADS_DIR.iterdir():
+            if file_path.stem == dataset_id and file_path.is_file():
+                return FileResponse(path=file_path, filename=file_path.name, media_type="application/octet-stream")
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download dataset: {str(e)}")
+
+
+@router.post("/datasets/combine")
+async def combine_datasets_endpoint(data: dict):
+    """
+    Combine datasets using featuretools
+    """
+    logger.info(f"Received request to combine datasets with data: {data}")
+    try:
+        session_id = str(uuid.uuid4())
+        agent = FeatureGeneratorAgent(
+            session_id=session_id,
+            tables=data["tables"],
+            relationships=data["relationships"],
+        )
+        task = "Generate features from the provided tables and relationships."
+        agent.run(task)
+
+        logger.info("Dataset combination started successfully.")
+        return {"success": True, "message": "Dataset combination started."}
+
+    except Exception as e:
+        logger.error(f"Failed to combine datasets: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to combine datasets: {str(e)}")
