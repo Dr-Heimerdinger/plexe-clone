@@ -67,8 +67,7 @@ class _Config:
             default_factory=lambda: [
                 "pandas",
                 "numpy",
-                "scikit-learn",
-                "sklearn",
+                "sklearn.*",
                 "joblib",
                 "mlxtend",
                 "xgboost",

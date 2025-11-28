@@ -434,21 +434,118 @@ body,
 /* ===== PostgreSQL Tab ===== */
 .postgres-tab {
     display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 2rem;
-}
-
-.postgres-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
 }
 
 .postgres-form h3 {
-    margin: 0;
-    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
     color: var(--text);
     font-weight: 600;
+}
+
+.postgres-form .form-description {
+    margin: 0 0 2rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.postgres-results {
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    height: fit-content;
+    position: sticky;
+    top: 1rem;
+}
+
+/* ===== Query Result ===== */
+.query-result-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.result-section h4 {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+.result-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.result-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.result-item:hover {
+    border-color: var(--primary-light);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.result-item .icon {
+    font-size: 1.1rem;
+    color: var(--primary);
+}
+
+.result-item .table-name {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.result-item .column-name {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.result-item .arrow {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.relationship-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.combine-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+}
+
+.combine-section p {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    color: var(--text);
 }
 
 .form-group {
@@ -662,4 +759,100 @@ body,
     .postgres-form h3 {
         display: none;
     }
+}
+
+/* ===== Overview Tab ===== */
+.overview-tab-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.overview-tab-container h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.overview-tab-container p {
+    color: var(--text-secondary);
+}
+
+.dataset-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.dataset-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.dataset-card:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.dataset-card h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+    word-break: break-all;
+}
+
+.dataset-card p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.dataset-card strong {
+    color: var(--text);
+}
+
+.card-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.card-actions button {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.card-actions button:first-child {
+    background: var(--primary);
+    color: white;
+}
+
+.card-actions button:first-child:hover {
+    background: var(--primary-hover);
+}
+
+.card-actions button.delete-button {
+    background: #fef2f2;
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+.card-actions button.delete-button:hover {
+    background: var(--error);
+    color: white;
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import UploadTab from './dataset/UploadTab'
 import PostgreSQLTab from './dataset/PostgreSQLTab'
+import OverviewTab from './dataset/OverviewTab'
 
 export default function Dataset() {
     const [activeTab, setActiveTab] = useState('upload')
@@ -15,6 +16,13 @@ export default function Dataset() {
             <div className="tabs">
                 <div className="tab-buttons">
                     <button
+                        className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('overview')}
+                    >
+                        <span className="icon">📊</span>
+                        Overview
+                    </button>
+                    <button
                         className={`tab-button ${activeTab === 'upload' ? 'active' : ''}`}
                         onClick={() => setActiveTab('upload')}
                     >
@@ -28,12 +36,14 @@ export default function Dataset() {
                         <span className="icon">🗄️</span>
                         PostgreSQL
                     </button>
+
                 </div>
 
                 <div className="tab-content">
 
                     {activeTab === 'upload' && <UploadTab />}
                     {activeTab === 'postgres' && <PostgreSQLTab />}
+                    {activeTab === 'overview' && <OverviewTab />}
                 </div>
             </div>
         </div>

@@ -10,6 +10,7 @@ import logging
 import uuid
 import types
 import warnings
+import subprocess
 from typing import Dict, List, Callable, Type
 
 from smolagents import tool
@@ -310,3 +311,52 @@ def get_model_artifacts() -> List[str]:
     except Exception as e:
         logger.warning(f"⚠️ Error getting model artifacts: {str(e)}")
         return []
+
+
+from plexe.tools.io_manager import write_file
+
+
+@tool
+def execute_code(code: str, timeout: int = 60) -> dict:
+    """
+    Executes a string of Python code in a subprocess.
+
+    Args:
+        code: The Python code to execute.
+        timeout: The timeout in seconds for the execution.
+
+    Returns:
+        A dictionary containing the stdout, stderr, and return code.
+    """
+    # a temporary file to store the code
+    code_file = write_file("code.py", code)
+    try:
+        process = subprocess.run(
+            ["python", code_file],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        logger.debug(f"✅ Code executed with return code {process.returncode}")
+        return {
+            "stdout": process.stdout,
+            "stderr": process.stderr,
+            "returncode": process.returncode,
+        }
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"🔥 Code execution timed out: {e}")
+        return {
+            "stdout": e.stdout,
+            "stderr": e.stderr,
+            "returncode": -1,
+            "error": "TimeoutExpired",
+        }
+    except Exception as e:
+        logger.error(f"🔥 Error executing code: {e}")
+        return {
+            "stdout": "",
+            "stderr": str(e),
+            "returncode": -1,
+            "error": type(e).__name__,
+        }

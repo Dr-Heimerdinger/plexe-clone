@@ -1352,6 +1352,42 @@ files = [
 devel = ["colorama", "json-spec", "jsonschema", "pylint", "pytest", "pytest-benchmark", "pytest-cache", "validictory"]
 
 [[package]]
+name = "featuretools"
+version = "1.31.0"
+description = "a framework for automated feature engineering"
+optional = false
+python-versions = "<4,>=3.9"
+groups = ["main"]
+files = [
+    {file = "featuretools-1.31.0-py3-none-any.whl", hash = "sha256:87c94e9ae959c89acd83da96bd2583f3ef0f6daaa9639cbb6e46dbde2c742a18"},
+    {file = "featuretools-1.31.0.tar.gz", hash = "sha256:01bfb17fcc1715b4c3623c7bc94a8982122c4a0fa03350ed478601bb81f90155"},
+]
+
+[package.dependencies]
+cloudpickle = ">=1.5.0"
+holidays = ">=0.17"
+numpy = ">=1.25.0"
+packaging = ">=20.0"
+pandas = ">=2.0.0"
+psutil = ">=5.7.0"
+scipy = ">=1.10.0"
+tqdm = ">=4.66.3"
+woodwork = ">=0.28.0"
+
+[package.extras]
+autonormalize = ["autonormalize (>=2.0.1)"]
+complete = ["featuretools[dask,nlp,premium]"]
+dask = ["dask[dataframe] (>=2023.2.0)", "distributed (>=2023.2.0)"]
+dev = ["black[jupyter] (>=23.1.0)", "featuretools[dask,docs,test]", "pre-commit (>=2.20.0)", "ruff (>=0.1.6)"]
+docs = ["Sphinx (==5.1.1)", "autonormalize (>=2.0.1)", "click (>=7.0.0)", "featuretools[dask,test]", "ipython (==8.4.0)", "jupyter (==1.0.0)", "jupyter-client (>=8.0.2)", "matplotlib (==3.7.2)", "myst-parser (==0.18.0)", "nbconvert (==6.5.0)", "nbsphinx (==0.8.9)", "pydata-sphinx-theme (==0.9.0)", "sphinx-copybutton (==0.5.0)", "sphinx-inline-tabs (==2022.1.2b11)"]
+nlp = ["nlp-primitives (>=2.12.0)"]
+premium = ["premium-primitives (>=0.0.3)"]
+sklearn = ["featuretools-sklearn-transformer (>=1.0.0)"]
+sql = ["featuretools-sql (>=0.0.1)", "psycopg2-binary (>=2.9.3)"]
+test = ["boto3 (>=1.34.32)", "composeml (>=0.8.0)", "graphviz (>=0.8.4)", "moto[all] (>=5.0.0)", "pip (>=23.3.0)", "pyarrow (>=14.0.1)", "pympler (>=0.8)", "pytest (>=7.1.2)", "pytest-cov (>=3.0.0)", "pytest-timeout (>=2.1.0)", "pytest-xdist (>=2.5.0)", "smart-open (>=5.0.0)", "urllib3 (>=1.26.18)"]
+tsfresh = ["featuretools-tsfresh-primitives (>=1.0.0)"]
+
+[[package]]
 name = "filelock"
 version = "3.20.0"
 description = "A platform independent file lock."
@@ -1939,6 +1975,21 @@ files = [
 tests = ["pytest"]
 
 [[package]]
+name = "holidays"
+version = "0.85"
+description = "Open World Holidays Framework"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "holidays-0.85-py3-none-any.whl", hash = "sha256:46445107ee3251c7e2daa23773a86921fa2e29d09f850038e7bfa2c75a434ad8"},
+    {file = "holidays-0.85.tar.gz", hash = "sha256:4291155456c6abde885487a05bd16f523d4ef4136819a55833ff86f60ca3cc3b"},
+]
+
+[package.dependencies]
+python-dateutil = "*"
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 description = "A minimal low-level HTTP client."
@@ -2204,6 +2255,26 @@ doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linke
 enabler = ["pytest-enabler (>=2.2)"]
 perf = ["ipython"]
 test = ["flufl.flake8", "importlib_resources (>=1.3) ; python_version < \"3.9\"", "jaraco.test (>=5.4)", "packaging", "pyfakefs", "pytest (>=6,!=8.1.*)", "pytest-perf (>=0.9.2)"]
+type = ["pytest-mypy"]
+
+[[package]]
+name = "importlib-resources"
+version = "6.5.2"
+description = "Read resources from Python packages"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "importlib_resources-6.5.2-py3-none-any.whl", hash = "sha256:789cfdc3ed28c78b67a06acb8126751ced69a3d5f79c095a98298cd8a760ccec"},
+    {file = "importlib_resources-6.5.2.tar.gz", hash = "sha256:185f87adef5bcc288449d98fb4fba07cea78bc036455dd44c5fc4a2fe78fed2c"},
+]
+
+[package.extras]
+check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
+cover = ["pytest-cov"]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+enabler = ["pytest-enabler (>=2.2)"]
+test = ["jaraco.test (>=5.4)", "pytest (>=6,!=8.1.*)", "zipp (>=3.17)"]
 type = ["pytest-mypy"]
 
 [[package]]
@@ -4680,7 +4751,6 @@ files = [
     {file = "psutil-7.1.3-cp37-abi3-win_arm64.whl", hash = "sha256:bd0d69cee829226a761e92f28140bec9a5ee9d5b4fb4b0cc589068dbfff559b1"},
     {file = "psutil-7.1.3.tar.gz", hash = "sha256:6c86281738d77335af7aec228328e944b30930899ea760ecf33a4dba66be5e74"},
 ]
-markers = {main = "extra == \"transformers\" or extra == \"all\""}
 
 [package.extras]
 dev = ["abi3audit", "black", "check-manifest", "colorama ; os_name == \"nt\"", "coverage", "packaging", "pylint", "pyperf", "pypinfo", "pyreadline ; os_name == \"nt\"", "pytest", "pytest-cov", "pytest-instafail", "pytest-subtests", "pytest-xdist", "pywin32 ; os_name == \"nt\" and platform_python_implementation != \"PyPy\"", "requests", "rstcheck", "ruff", "setuptools", "sphinx", "sphinx_rtd_theme", "toml-sort", "twine", "validate-pyproject[all]", "virtualenv", "vulture", "wheel", "wheel ; os_name == \"nt\" and platform_python_implementation != \"PyPy\"", "wmi ; os_name == \"nt\" and platform_python_implementation != \"PyPy\""]
@@ -7521,6 +7591,33 @@ MarkupSafe = ">=2.1.1"
 watchdog = ["watchdog (>=2.3)"]
 
 [[package]]
+name = "woodwork"
+version = "0.31.0"
+description = "a data typing library for machine learning"
+optional = false
+python-versions = "<4,>=3.9"
+groups = ["main"]
+files = [
+    {file = "woodwork-0.31.0-py3-none-any.whl", hash = "sha256:5cb3370553b5f466f8c8599b1bf559584dc0b798cc1f2da26bbd7029d256c6f9"},
+    {file = "woodwork-0.31.0.tar.gz", hash = "sha256:6ef82af1d5b6525b02efe6417c574c810cfdcc606cb266bd0d7fb17a1d066b67"},
+]
+
+[package.dependencies]
+importlib-resources = ">=5.10.0"
+numpy = ">=1.25.0"
+pandas = ">=2.0.0"
+python-dateutil = ">=2.8.2"
+scikit-learn = ">=1.1.0"
+scipy = ">=1.10.0"
+
+[package.extras]
+complete = ["woodwork[updater]"]
+dev = ["click (>=8.1.7)", "pre-commit (>=2.20.0)", "ruff (>=0.1.6)", "woodwork[docs,test]"]
+docs = ["Sphinx (==5.1.1)", "ipython (==8.4.0)", "jupyter (==1.0.0)", "myst-parser (==0.18.0)", "nbconvert (==6.5.0)", "nbsphinx (==0.8.9)", "pyarrow (>=14.0.1)", "pydata-sphinx-theme (==0.9.0)", "sphinx-copybutton (==0.5.0)", "sphinx-inline-tabs (==2022.1.2b11)"]
+test = ["boto3 (>=1.34.32)", "moto[all] (>=5.0.0)", "pyarrow (>=14.0.1)", "pytest (>=7.0.1)", "pytest-cov (>=2.10.1)", "pytest-xdist (>=2.1.0)", "smart-open (>=5.0.0)"]
+updater = ["alteryx-open-src-update-checker (>=3.1.0)"]
+
+[[package]]
 name = "wrapt"
 version = "2.0.1"
 description = "Module for decorators, wrappers and monkey patching."
@@ -7844,4 +7941,4 @@ transformers = ["accelerate", "safetensors", "tokenizers", "transformers"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "8282e9c658fe0c143d3c9f4f81073b37edac5a544b5c27b591856f8b21eb217e"
+content-hash = "0d01fe62b55f0e15fea9dc4e90e9604a1882f4e0176ca86d51904d5ecaaa2120"

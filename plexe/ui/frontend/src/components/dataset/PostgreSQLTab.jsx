@@ -83,7 +83,11 @@ export default function PostgreSQLTab() {
         setCombining(true)
         setCombineStatus(null)
         try {
-            await combineDatasets(queryResult.tables, queryResult.relationships)
+            await combineDatasets(
+                queryResult.tables,
+                queryResult.relationships,
+                connectionForm
+            )
             setCombineStatus({
                 type: 'success',
                 message: 'Dataset combination started successfully!',

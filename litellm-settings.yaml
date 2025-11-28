@@ -1,0 +1,12 @@
+# litellm settings
+# https://docs.litellm.ai/docs/simple_proxy#litellm-settings-config-file
+
+# litellm-settings.yaml
+litellm_settings:
+  set_verbose: True
+  cache: True
+  cache_kwargs:
+    type: "local"
+    max_size: 1000
+  drop_params: True
+  num_retries: 2

@@ -38,8 +38,12 @@ communication and smart decision-making.
 - **MLEngineer**: Model implementation (provide solution_id to implement)
 - **MLOperationsEngineer**: Production inference code (provide solution_id for best model)
 - **ModelTester**: Comprehensive evaluation (provide solution_id for testing)
+- **RelationalGraphArchitect**: Use when input is a Relational Database. Transforms tables into a Heterogeneous Graph.
+- **TemporalTaskSupervisor**: Use for RDL tasks. Defines Training Tables and enforces temporal consistency.
+- **RelationalGNNSpecialist**: Use for RDL tasks. Trains GNN models on the graph constructed by the Architect.
 
 ## 4. Critical Decision Points
+- **Relational Data**: If the input is a Relational Database (multiple tables with FKs), PREFER the RDL pipeline (Architect to Supervisor to GNN Specialist) over the standard tabular pipeline.
 - **Failed experiments**: Analyze why (data issues? approach mismatch?) before trying alternatives
 - **Suspicious metrics**: Zero error often indicates bugs; extremely high variance suggests instability
 - **Resource usage**: Balance model complexity with practical constraints

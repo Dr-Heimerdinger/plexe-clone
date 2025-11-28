@@ -2,6 +2,7 @@
 This module defines a multi-agent ML engineering system for building machine learning models.
 """
 
+import os
 import json
 import logging
 import types
@@ -18,6 +19,9 @@ from plexe.agents.model_planner import ModelPlannerAgent
 from plexe.agents.model_tester import ModelTesterAgent
 from plexe.agents.model_trainer import ModelTrainerAgent
 from plexe.agents.schema_resolver import SchemaResolverAgent
+from plexe.agents.relational_graph_architect import RelationalGraphArchitectAgent
+from plexe.agents.temporal_task_supervisor import TemporalTaskSupervisorAgent
+from plexe.agents.relational_gnn_specialist import RelationalGNNSpecialistAgent
 from plexe.config import config
 from plexe.core.object_registry import ObjectRegistry
 from plexe.internal.models.entities.artifact import Artifact
@@ -61,23 +65,12 @@ class PlexeAgent:
     """
 
     def __init__(
-        # self,
-        # orchestrator_model_id: str = "anthropic/claude-3-7-sonnet-20250219",
-        # ml_researcher_model_id: str = "openai/gpt-4o",
-        # ml_engineer_model_id: str = "anthropic/claude-3-7-sonnet-20250219",
-        # ml_ops_engineer_model_id: str = "anthropic/claude-3-7-sonnet-20250219",
-        # tool_model_id: str = "openai/gpt-4o",
-        # verbose: bool = False,
-        # max_steps: int = 50,
-        # distributed: bool = False,
-        # chain_of_thought_callable: Optional[Callable] = None,
-        # max_solutions: int = 1,
         self,
-        orchestrator_model_id: str = "gemini/gemini-2.5-flash",
-        ml_researcher_model_id: str = "gemini/gemini-2.5-flash",
-        ml_engineer_model_id: str = "gemini/gemini-2.5-flash",
-        ml_ops_engineer_model_id: str = "gemini/gemini-2.5-flash",
-        tool_model_id: str = "gemini/gemini-2.5-flash",
+        orchestrator_model_id: str = None,
+        ml_researcher_model_id: str = None,
+        ml_engineer_model_id: str = None,
+        ml_ops_engineer_model_id: str = None,
+        tool_model_id: str = None,
         verbose: bool = False,
         max_steps: int = 50,
         distributed: bool = False,
@@ -98,11 +91,19 @@ class PlexeAgent:
             distributed: Whether to run the agents in a distributed environment
             chain_of_thought_callable: Optional callable for chain of thought logging
         """
-        self.orchestrator_model_id = orchestrator_model_id
-        self.ml_researcher_model_id = ml_researcher_model_id
-        self.ml_engineer_model_id = ml_engineer_model_id
-        self.ml_ops_engineer_model_id = ml_ops_engineer_model_id
-        self.tool_model_id = tool_model_id
+        self.orchestrator_model_id = orchestrator_model_id or os.environ.get(
+            "PLEXE_ORCHESTRATOR_MODEL", "gemini/gemini-2.5-flash"
+        )
+        self.ml_researcher_model_id = ml_researcher_model_id or os.environ.get(
+            "PLEXE_ML_RESEARCHER_MODEL", "gemini/gemini-2.5-flash"
+        )
+        self.ml_engineer_model_id = ml_engineer_model_id or os.environ.get(
+            "PLEXE_ML_ENGINEER_MODEL", "gemini/gemini-2.5-flash"
+        )
+        self.ml_ops_engineer_model_id = ml_ops_engineer_model_id or os.environ.get(
+            "PLEXE_ML_OPS_ENGINEER_MODEL", "gemini/gemini-2.5-flash"
+        )
+        self.tool_model_id = tool_model_id or os.environ.get("PLEXE_TOOL_MODEL", "gemini/gemini-2.5-flash")
         self.verbose = verbose
         self.max_steps = max_steps
         self.distributed = distributed
@@ -174,6 +175,27 @@ class PlexeAgent:
             chain_of_thought_callable=self.chain_of_thought_callable,
         ).agent
 
+        # Create Relational Graph Architect Agent
+        self.relational_graph_architect_agent = RelationalGraphArchitectAgent(
+            model_id=self.ml_engineer_model_id,
+            verbose=verbose,
+            chain_of_thought_callable=self.chain_of_thought_callable,
+        ).agent
+
+        # Create Temporal Task Supervisor Agent
+        self.temporal_task_supervisor_agent = TemporalTaskSupervisorAgent(
+            model_id=self.ml_engineer_model_id,
+            verbose=verbose,
+            chain_of_thought_callable=self.chain_of_thought_callable,
+        ).agent
+
+        # Create Relational GNN Specialist Agent
+        self.relational_gnn_specialist_agent = RelationalGNNSpecialistAgent(
+            model_id=self.ml_engineer_model_id,
+            verbose=verbose,
+            chain_of_thought_callable=self.chain_of_thought_callable,
+        ).agent
+
         # Create orchestrator agent - coordinates the workflow
         self.manager_agent = CodeAgent(
             name="Orchestrator",
@@ -195,6 +217,9 @@ class PlexeAgent:
                 self.mle_agent,
                 self.mlops_engineer,
                 self.model_tester_agent,
+                self.relational_graph_architect_agent,
+                self.temporal_task_supervisor_agent,
+                self.relational_gnn_specialist_agent,
             ],
             add_base_tools=False,
             verbosity_level=self.orchestrator_verbosity,

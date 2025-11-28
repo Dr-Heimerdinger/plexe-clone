@@ -8,6 +8,7 @@ import logging
 import os
 
 import uvicorn
+from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     """Launch the Plexe assistant with a web UI."""
+    load_dotenv()
     host = "127.0.0.1"
     port = 8000
 

@@ -69,6 +69,8 @@ services:
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
       MLFLOW_BACKEND_STORE_URI: ${MLFLOW_BACKEND_STORE_URI:-postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow_db}
       MLFLOW_HTTP_REQUEST_TIMEOUT: 300
+      HF_TOKEN: ${HF_TOKEN}
+      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY}
     volumes:
       - .:/app
     ports:
