@@ -8,6 +8,7 @@ and serves the assistant-ui frontend for local execution.
 import json
 import logging
 import uuid
+import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -17,6 +18,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from plexe.agents.conversational import ConversationalAgent
 from plexe.api import datasets_router
+from plexe.internal.common.utils.chain_of_thought import (
+    ChainOfThoughtCallable,
+    MultiEmitter,
+    ConsoleEmitter,
+    WebSocketEmitter,
+    set_current_emitter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +77,29 @@ async def websocket_endpoint(websocket: WebSocket):
     session_id = str(uuid.uuid4())
     logger.info(f"New WebSocket connection: {session_id}")
 
-    # Create a new agent instance for this session
-    agent = ConversationalAgent()
+    # Get the current event loop for thread-safe scheduling
+    loop = asyncio.get_running_loop()
+
+    # Create emitters for chain of thought
+    ws_emitter = WebSocketEmitter(websocket, loop=loop)
+    console_emitter = ConsoleEmitter()
+    multi_emitter = MultiEmitter([ws_emitter, console_emitter])
+
+    # Create chain of thought callable with the multi emitter
+    chain_of_thought = ChainOfThoughtCallable(emitter=multi_emitter)
+
+    # Create a new agent instance for this session with chain of thought
+    agent = ConversationalAgent(chain_of_thought_callable=chain_of_thought)
+
+    def run_agent_with_context(message: str) -> str:
+        """Run agent with the current emitter set in context."""
+        # Set the emitter in context so sub-agents and tools can access it
+        set_current_emitter(multi_emitter)
+        try:
+            return agent.agent.run(message, reset=False)
+        finally:
+            # Reset to None after run
+            set_current_emitter(None)
 
     try:
         while True:
@@ -83,14 +112,17 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Process the message with the agent
                 logger.debug(f"Processing message: {user_message[:100]}...")
-                response = agent.agent.run(user_message, reset=False)
+
+                # Run the agent in a separate thread to avoid blocking the event loop
+                # This allows WebSocket messages (thinking steps) to be sent in real-time
+                response = await asyncio.to_thread(run_agent_with_context, user_message)
 
                 # Send response back to client
                 await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
 
             except json.JSONDecodeError:
                 # Handle plain text messages for compatibility
-                response = agent.agent.run(data, reset=False)
+                response = await asyncio.to_thread(run_agent_with_context, data)
                 await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
 
             except Exception as e:

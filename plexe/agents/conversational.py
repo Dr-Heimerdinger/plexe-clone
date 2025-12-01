@@ -8,12 +8,13 @@ when all necessary information has been gathered.
 
 import logging
 import os
+from typing import Optional, Callable
 
 from smolagents import ToolCallingAgent, LiteLLMModel
 
 from plexe.internal.common.utils.agents import get_prompt_templates
 from plexe.tools.datasets import get_dataset_preview
-from plexe.tools.conversation import validate_dataset_files, initiate_model_build
+from plexe.tools.conversation import validate_dataset_files, initiate_model_build, validate_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class ConversationalAgent:
         self,
         model_id: str | None = None,
         verbose: bool = False,
+        chain_of_thought_callable: Optional[Callable] = None,
     ):
         """
         Initialize the conversational agent.
@@ -38,6 +40,7 @@ class ConversationalAgent:
         Args:
             model_id: Model ID for the LLM to use for conversation
             verbose: Whether to display detailed agent logs
+            chain_of_thought_callable: Optional callable for chain of thought logging
         """
         # Choose model id with this precedence:
         # 1. explicit `model_id` argument
@@ -72,7 +75,7 @@ class ConversationalAgent:
         self.agent = ToolCallingAgent(
             name="ModelDefinitionAssistant",
             description=(
-                "Expert ML consultant that helps users define their machine learning requirements "
+                "Expert ML and DL consultant that helps users define their machine learning and deep learning requirements "
                 "through conversational guidance. Specializes in clarifying problem definitions, "
                 "understanding data requirements, and initiating model builds when ready. "
                 "Maintains a friendly, helpful conversation while ensuring all technical "
@@ -82,10 +85,12 @@ class ConversationalAgent:
             tools=[
                 get_dataset_preview,
                 validate_dataset_files,
+                validate_db_connection,
                 initiate_model_build,
             ],
             add_base_tools=False,
             verbosity_level=self.verbosity,
+            step_callbacks=[chain_of_thought_callable] if chain_of_thought_callable else None,
             prompt_templates=get_prompt_templates(
                 base_template_name="toolcalling_agent.yaml",
                 override_template_name="conversational_prompt_templates.yaml",

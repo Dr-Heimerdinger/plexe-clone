@@ -56,7 +56,7 @@ class RelationalGraphArchitectAgent:
                 base_template_name="code_agent.yaml",
                 override_template_name="relational_graph_architect_prompt_templates.yaml",
             ),
-            verbose=verbose,
+            # verbose=verbose, # Removed verbose argument
             verbosity_level=self.verbosity,
             add_base_tools=False,
             additional_authorized_imports=config.code_generation.authorized_agent_imports
@@ -71,6 +71,10 @@ class RelationalGraphArchitectAgent:
                 "torch.*",
                 "torch_geometric",
                 "torch_geometric.*",
+                "sqlalchemy",
+                "sqlalchemy.*",
+                "psycopg2",
+                "psycopg2.*",
             ],
             step_callbacks=[chain_of_thought_callable],
         )

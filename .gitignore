@@ -306,3 +306,6 @@ poetry.lock
 data/
 data/uploads/
 data/uploads/*
+
+model-from-chat.tar.gz
+model_output_from_chat/

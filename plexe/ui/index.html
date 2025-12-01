@@ -254,6 +254,32 @@
         // Simple message component
         function Message({ message }) {
             const isUser = message.role === 'user';
+            const isThinking = message.role === 'thinking';
+            
+            if (isThinking) {
+                return React.createElement('div', {
+                    className: 'flex justify-center mb-3'
+                },
+                    React.createElement('div', {
+                        className: 'max-w-[85%] rounded-lg px-4 py-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-l-4 border-blue-400 shadow-sm'
+                    },
+                        React.createElement('div', {
+                            className: 'flex justify-between items-center mb-2 pb-2 border-b border-blue-200'
+                        },
+                            React.createElement('span', {
+                                className: 'font-semibold text-blue-700 text-sm'
+                            }, message.agent_name),
+                            React.createElement('span', {
+                                className: 'text-xs text-gray-500 italic'
+                            }, `Step ${message.step_number}`)
+                        ),
+                        React.createElement('div', {
+                            className: 'text-sm text-gray-700 whitespace-pre-wrap'
+                        }, message.message)
+                    )
+                );
+            }
+            
             return React.createElement('div', {
                 className: `flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`
             },

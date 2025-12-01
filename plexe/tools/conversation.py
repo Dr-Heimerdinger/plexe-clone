@@ -9,10 +9,11 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import pandas as pd
 from smolagents import tool
+from sqlalchemy import create_engine, inspect
 
 import plexe
 from plexe.internal.common.datasets.adapter import DatasetAdapter
@@ -20,6 +21,7 @@ from plexe.internal.common.datasets.interface import TabularConvertible
 from plexe.internal.common.provider import ProviderConfig
 from plexe.core.object_registry import ObjectRegistry
 from plexe.internal.models.callbacks.mlflow import MLFlowCallback
+from plexe.internal.common.utils.chain_of_thought import get_current_emitter
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,7 @@ def validate_dataset_files(file_paths: List[str]) -> Dict[str, Dict]:
             # File successfully read
             result["valid"] = True
             result["dataset_name"] = path_obj.stem
+            result["shape"] = df.shape
 
             # Register the DataFrame in object registry
             ObjectRegistry().register(
@@ -78,19 +81,47 @@ def validate_dataset_files(file_paths: List[str]) -> Dict[str, Dict]:
 
 
 @tool
+def validate_db_connection(connection_string: str) -> Dict[str, Any]:
+    """
+    Validate a database connection string and retrieve schema information.
+    Use this to check if the agent can connect to the provided database.
+
+    Args:
+        connection_string: Database connection string (e.g., postgresql+psycopg2://user:pass@host:port/dbname)
+
+    Returns:
+        Dictionary with connection status and list of tables if successful.
+    """
+    try:
+        engine = create_engine(connection_string)
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+
+        return {
+            "valid": True,
+            "tables": table_names,
+            "message": f"Successfully connected. Found {len(table_names)} tables: {', '.join(table_names[:5])}...",
+        }
+    except Exception as e:
+        return {"valid": False, "error": str(e), "message": f"Failed to connect to database: {str(e)}"}
+
+
+@tool
 def initiate_model_build(
     intent: str,
-    dataset_file_paths: List[str],
+    dataset_file_paths: List[str] = [],
+    db_connection_string: Optional[str] = None,
     input_schema: Optional[Dict] = None,
     output_schema: Optional[Dict] = None,
     n_solutions_to_try: int = 1,
 ) -> Dict[str, str]:
     """
-    Initiate a model build by loading datasets from file paths and starting the build process.
+    Initiate a model build by loading datasets from file paths OR connecting to a database, and starting the build process.
 
     Args:
         intent: Natural language description of what the model should do
-        dataset_file_paths: List of file paths to dataset files (CSV or Parquet)
+        dataset_file_paths: List of file paths to dataset files (CSV or Parquet). Optional if db_connection_string is provided.
+        db_connection_string: Database connection string for Relational Deep Learning. Optional if dataset_file_paths is provided.
         input_schema: The input schema for the model, as a flat field:type dictionary; leave None if not known
         output_schema: The output schema for the model, as a flat field:type dictionary; leave None if not known
         n_solutions_to_try: Number of model solutions to try, out of which the best will be selected
@@ -99,50 +130,59 @@ def initiate_model_build(
         Dictionary with build initiation status and details
     """
     try:
-        # First validate all files can be read
-        validation_results = validate_dataset_files(dataset_file_paths)
-
-        # Check if any files failed validation
-        failed_files = [path for path, result in validation_results.items() if not result["valid"]]
-        if failed_files:
-            error_details = {path: validation_results[path]["error"] for path in failed_files}
+        # Validate inputs
+        if not dataset_file_paths and not db_connection_string:
             return {
                 "status": "failed",
-                "message": f"Failed to read dataset files: {failed_files}",
-                "errors": error_details,
+                "message": "Either dataset_file_paths or db_connection_string must be provided.",
             }
 
-        # Load datasets into DataFrames
-        df = None
+        # Validate files if provided
+        if dataset_file_paths:
+            validation_results = validate_dataset_files(dataset_file_paths)
+            failed_files = [path for path, result in validation_results.items() if not result["valid"]]
+            if failed_files:
+                error_details = {path: validation_results[path]["error"] for path in failed_files}
+                return {
+                    "status": "failed",
+                    "message": f"Failed to read dataset files: {failed_files}",
+                    "errors": error_details,
+                }
+
+        # Validate DB if provided
+        if db_connection_string:
+            db_result = validate_db_connection(db_connection_string)
+            if not db_result["valid"]:
+                return {"status": "failed", "message": f"Invalid database connection: {db_result['error']}"}
+
+        # Load datasets into DataFrames (if any)
+        datasets = []
         for file_path in dataset_file_paths:
             path_obj = Path(file_path)
             file_extension = path_obj.suffix.lower()
 
             if file_extension == ".csv":
                 df = pd.read_csv(file_path)
+                datasets.append(df)
             elif file_extension in [".parquet", ".pq"]:
                 df = pd.read_parquet(file_path)
+                datasets.append(df)
 
         # Import here to avoid circular dependencies
         from plexe.model_builder import ModelBuilder
 
-        # Create ModelBuilder instance with loaded DataFrames
-        # model_builder = ModelBuilder(
-        #     provider=ProviderConfig(
-        #         default_provider="openai/gpt-4o",
-        #         orchestrator_provider="anthropic/claude-3-7-sonnet-20250219",
-        #         research_provider="openai/gpt-4o",
-        #         engineer_provider="anthropic/claude-sonnet-4-20250514",
-        #         ops_provider="anthropic/claude-sonnet-4-20250514",
-        #         tool_provider="openai/gpt-4o",
-        #     ),
-        # )
+        gemini_model = "gemini/gemini-2.5-flash"
 
-        gemini_model = "gemini/gemini-2.5-flash"  # or your specific Gemini model
+        # Get the emitter from context variable (set by the server)
+        # This allows sub-agents to share the same WebSocket emitter
+        custom_emitter = get_current_emitter()
+        if custom_emitter:
+            logger.info("Found emitter in context, will pass to ModelBuilder")
+        else:
+            logger.warning("No emitter found in context, ModelBuilder will use default ConsoleEmitter")
 
         model_builder = ModelBuilder(
             provider=ProviderConfig(
-                # Use Gemini for all roles since it's our only available provider
                 default_provider=gemini_model,
                 orchestrator_provider=gemini_model,
                 research_provider=gemini_model,
@@ -150,13 +190,15 @@ def initiate_model_build(
                 ops_provider=gemini_model,
                 tool_provider=gemini_model,
             ),
-            # Add working_dir to ensure model artifacts are saved
             working_dir="./workdir/chat-session/",
         )
 
         # Start the build process
         logger.info(f"Initiating model build with intent: {intent}")
-        logger.info(f"Using dataset files: {dataset_file_paths}")
+        if dataset_file_paths:
+            logger.info(f"Using dataset files: {dataset_file_paths}")
+        if db_connection_string:
+            logger.info(f"Using database connection: {db_connection_string}")
 
         # Set up MLFlow callback if tracking URI is configured
         callbacks = []
@@ -171,21 +213,23 @@ def initiate_model_build(
 
         model = model_builder.build(
             intent=intent,
-            datasets=[df],  # Pass actual DataFrames instead of names
+            datasets=datasets,
+            db_connection_string=db_connection_string,
             input_schema=input_schema,
             output_schema=output_schema,
             max_iterations=n_solutions_to_try,
             callbacks=callbacks if callbacks else None,
+            # Pass the emitter from context variable
+            _custom_emitter=custom_emitter,
         )
 
         plexe.save_model(model, "model-from-chat.tar.gz")
 
-        # For now, just return success status
         return {
             "status": "initiated",
             "message": f"Model build started successfully with intent: '{intent}'",
             "dataset_files": dataset_file_paths,
-            "dataset_shapes": [validation_results[path]["shape"] for path in dataset_file_paths],
+            "db_connection": "Provided" if db_connection_string else "None",
         }
 
     except Exception as e:

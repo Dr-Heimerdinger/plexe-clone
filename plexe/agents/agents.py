@@ -247,7 +247,18 @@ class PlexeAgent:
                 logger.debug("Agent result: %s", result)
 
             if isinstance(result, AgentText):
-                result = json.loads(str(result))
+                try:
+                    result = json.loads(str(result))
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse agent result as JSON: {e}. Raw result: {str(result)}")
+                    # Return a partial result indicating failure to prevent crash
+                    result = {
+                        "status": "failed",
+                        "error": f"Agent returned invalid JSON: {str(e)}",
+                        "raw_output": str(result),
+                        "metadata": {},
+                        "performance": {"name": "unknown", "value": 0.0},
+                    }
 
             # Extract data from the agent result
             best_solution = object_registry.get(Solution, "best_performing_solution")
@@ -285,10 +296,21 @@ class PlexeAgent:
 
             # Compile the inference code into a module
             inference_module: types.ModuleType = types.ModuleType("predictor")
-            exec(inference_code, inference_module.__dict__)
-            # Instantiate the predictor class from the loaded module
-            predictor_class = getattr(inference_module, "PredictorImplementation")
-            predictor = predictor_class(best_solution.model_artifacts)
+            predictor = None
+
+            if inference_code and isinstance(inference_code, str):
+                try:
+                    exec(inference_code, inference_module.__dict__)
+                    # Instantiate the predictor class from the loaded module
+                    if hasattr(inference_module, "PredictorImplementation"):
+                        predictor_class = getattr(inference_module, "PredictorImplementation")
+                        predictor = predictor_class(best_solution.model_artifacts)
+                    else:
+                        logger.warning("PredictorImplementation class not found in inference code.")
+                except Exception as e:
+                    logger.error(f"Failed to compile or instantiate predictor: {e}")
+            else:
+                logger.warning("No valid inference code found. Predictor will be None.")
 
             # Get feature transformer code if available
             feature_transformer_code = None

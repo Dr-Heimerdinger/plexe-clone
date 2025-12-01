@@ -4,6 +4,7 @@ Tools for temporal processing and training table generation for the Temporal Tas
 
 from typing import Dict, Any
 from smolagents import tool
+from plexe.core.object_registry import ObjectRegistry
 
 
 @tool
@@ -45,7 +46,7 @@ def temporal_split(training_table: Dict[str, Any], val_timestamp: str, test_time
         A dictionary containing statistics about the split (counts, ranges).
     """
     # Placeholder implementation.
-    return {
+    result = {
         "train_count": 1000,
         "val_count": 200,
         "test_count": 200,
@@ -53,6 +54,12 @@ def temporal_split(training_table: Dict[str, Any], val_timestamp: str, test_time
         "test_cutoff": test_timestamp,
         "status": "Split completed successfully.",
     }
+
+    # Register the split info so downstream agents can find it
+    object_registry = ObjectRegistry()
+    object_registry.register(dict, "temporal_split_info", result, overwrite=True)
+
+    return result
 
 
 @tool

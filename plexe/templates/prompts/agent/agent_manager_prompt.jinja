@@ -16,6 +16,11 @@ communication and smart decision-making.
 - Decide if feature engineering is needed based on dataset and task
 - Ensure the team has all necessary information to proceed
 
+### Phase 1.5: Prepare Data
+- For Tabular Data: Use 'DatasetSplitter' to split the dataset into train/validation/test sets.
+- For Relational Data: Use 'TemporalTaskSupervisor' to define the training table and perform temporal splitting.
+- This step is CRITICAL. Do not proceed to training without registered split datasets.
+
 ### Phase 2: Experiment Intelligently ({{ max_iterations }} approaches maximum)
 - Work with Solutions created by MLResearcher - get solution IDs and implement them
 - Start with a simple baseline to establish a performance benchmark
@@ -39,8 +44,8 @@ communication and smart decision-making.
 - **MLOperationsEngineer**: Production inference code (provide solution_id for best model)
 - **ModelTester**: Comprehensive evaluation (provide solution_id for testing)
 - **RelationalGraphArchitect**: Use when input is a Relational Database. Transforms tables into a Heterogeneous Graph.
-- **TemporalTaskSupervisor**: Use for RDL tasks. Defines Training Tables and enforces temporal consistency.
-- **RelationalGNNSpecialist**: Use for RDL tasks. Trains GNN models on the graph constructed by the Architect.
+- **TemporalTaskSupervisor**: Use for Relational Deep Learning tasks. Defines Training Tables and enforces temporal consistency.
+- **RelationalGNNSpecialist**: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
 
 ## 4. Critical Decision Points
 - **Relational Data**: If the input is a Relational Database (multiple tables with FKs), PREFER the RDL pipeline (Architect to Supervisor to GNN Specialist) over the standard tabular pipeline.

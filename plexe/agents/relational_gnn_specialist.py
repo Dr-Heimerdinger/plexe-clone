@@ -56,7 +56,7 @@ class RelationalGNNSpecialistAgent:
                 base_template_name="code_agent.yaml",
                 override_template_name="relational_gnn_specialist_prompt_templates.yaml",
             ),
-            verbose=verbose,
+            # verbose=verbose, # Removed verbose argument
             verbosity_level=self.verbosity,
             add_base_tools=False,
             additional_authorized_imports=config.code_generation.authorized_agent_imports

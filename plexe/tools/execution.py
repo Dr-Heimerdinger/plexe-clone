@@ -267,7 +267,10 @@ def apply_feature_transformer(dataset_name: str) -> Dict:
         module = types.ModuleType("feature_transformer_module")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            exec(transformer_code, module.__dict__)
+            if transformer_code and isinstance(transformer_code, str):
+                exec(transformer_code, module.__dict__)
+            else:
+                raise ValueError("Feature transformer code is invalid or missing.")
 
         # Instantiate transformer
         transformer = module.FeatureTransformerImplementation()

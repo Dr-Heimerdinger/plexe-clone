@@ -2,6 +2,22 @@ import React, { useEffect, useRef, useState } from 'react'
 
 function Message({ msg }) {
     const isUser = msg.role === 'user'
+    const isThinking = msg.role === 'thinking'
+
+    if (isThinking) {
+        return (
+            <div className="message thinking">
+                <div className="thinking-bubble">
+                    <div className="thinking-header">
+                        <span className="agent-name">{msg.agent_name}</span>
+                        <span className="step-number">Step {msg.step_number}</span>
+                    </div>
+                    <div className="thinking-content">{msg.message}</div>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className={`message ${isUser ? 'user' : 'assistant'}`}>
             <div className="bubble">{msg.content}</div>
@@ -9,35 +25,18 @@ function Message({ msg }) {
     )
 }
 
-export default function Chat({ wsUrl }) {
-    const [messages, setMessages] = useState([])
+export default function Chat({ messages, status, onSendMessage, isProcessing }) {
     const [input, setInput] = useState('')
-    const [status, setStatus] = useState('disconnected')
-    const wsRef = useRef(null)
+    const messagesEndRef = useRef(null)
 
+    // Auto-scroll to bottom when messages change
     useEffect(() => {
-        const ws = new WebSocket(wsUrl)
-        wsRef.current = ws
-
-        ws.onopen = () => setStatus('connected')
-        ws.onclose = () => setStatus('disconnected')
-        ws.onmessage = (ev) => {
-            try {
-                const data = JSON.parse(ev.data)
-                setMessages((m) => [...m, data])
-            } catch (e) {
-                console.error('invalid ws message', e)
-            }
-        }
-
-        return () => ws.close()
-    }, [wsUrl])
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [messages, isProcessing])
 
     const send = () => {
         if (!input.trim()) return
-        const msg = { role: 'user', content: input }
-        setMessages((m) => [...m, msg])
-        wsRef.current?.send(JSON.stringify({ content: input }))
+        onSendMessage(input)
         setInput('')
     }
 
@@ -48,6 +47,16 @@ export default function Chat({ wsUrl }) {
                 {messages.map((m, i) => (
                     <Message key={i} msg={m} />
                 ))}
+                {isProcessing && (
+                    <div className="message thinking-indicator">
+                        <div className="bubble processing">
+                            <span className="dot"></span>
+                            <span className="dot"></span>
+                            <span className="dot"></span>
+                        </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
             </div>
             <div className="composer">
                 <input
@@ -59,8 +68,9 @@ export default function Chat({ wsUrl }) {
                         }
                     }}
                     placeholder="Type your message..."
+                    disabled={isProcessing}
                 />
-                <button onClick={send}>Send</button>
+                <button onClick={send} disabled={isProcessing}>Send</button>
             </div>
         </div>
     )

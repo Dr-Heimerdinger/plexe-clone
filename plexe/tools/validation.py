@@ -29,6 +29,9 @@ def validate_training_code(training_code: str) -> Dict:
     Returns:
         A dictionary containing validation results
     """
+    if not training_code or not isinstance(training_code, str):
+        return _error_response("validation", "InvalidCode", "Training code is invalid or missing.")
+
     validator = TrainingCodeValidator()
     validation = validator.validate(training_code)
 
@@ -70,6 +73,18 @@ def validate_inference_code(
     # Get schemas from registry
     try:
         schemas = get_solution_schemas("best_performing_solution")
+        if "input" not in schemas:
+            return _error_response(
+                "schema_preparation",
+                "MissingSchema",
+                "Input schema not found for solution 'best_performing_solution'. Ensure schemas are registered.",
+            )
+        if "output" not in schemas:
+            return _error_response(
+                "schema_preparation",
+                "MissingSchema",
+                "Output schema not found for solution 'best_performing_solution'. Ensure schemas are registered.",
+            )
         input_schema = schemas["input"]
         output_schema = schemas["output"]
     except Exception as e:
@@ -103,17 +118,20 @@ def validate_inference_code(
 
         # Also instantiate and register the predictor for the model tester agent
         try:
-            import types
+            if inference_code and isinstance(inference_code, str):
+                import types
 
-            predictor_module = types.ModuleType("predictor")
-            exec(inference_code, predictor_module.__dict__)
-            predictor_class = getattr(predictor_module, "PredictorImplementation")
-            predictor = predictor_class(solution.model_artifacts)
+                predictor_module = types.ModuleType("predictor")
+                exec(inference_code, predictor_module.__dict__)
+                predictor_class = getattr(predictor_module, "PredictorImplementation")
+                predictor = predictor_class(solution.model_artifacts)
 
-            # Register the instantiated predictor
-            from plexe.core.interfaces.predictor import Predictor
+                # Register the instantiated predictor
+                from plexe.core.interfaces.predictor import Predictor
 
-            object_registry.register(Predictor, "trained_predictor", predictor, overwrite=True)
+                object_registry.register(Predictor, "trained_predictor", predictor, overwrite=True)
+            else:
+                logger.warning("Skipping predictor instantiation in validation: inference_code is invalid.")
             logger.debug("✅ Registered instantiated predictor for testing")
 
         except Exception as e:
@@ -179,7 +197,10 @@ def validate_feature_transformations(transformation_code: str) -> Dict:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             module = types.ModuleType("test_feature_transformer")
-            exec(transformation_code, module.__dict__)
+            if transformation_code and isinstance(transformation_code, str):
+                exec(transformation_code, module.__dict__)
+            else:
+                return _error_response("validation", "InvalidCode", "Transformation code is invalid or missing.")
 
             # Check if the module contains the FeatureTransformerImplementation class
             if not hasattr(module, "FeatureTransformerImplementation"):

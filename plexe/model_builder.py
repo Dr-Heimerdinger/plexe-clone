@@ -67,6 +67,7 @@ class ModelBuilder:
         self,
         intent: str,
         datasets: List[pd.DataFrame | DatasetGenerator],
+        db_connection_string: Optional[str] = None,
         input_schema: Type[BaseModel] | Dict[str, type] = None,
         output_schema: Type[BaseModel] | Dict[str, type] = None,
         timeout: int = None,
@@ -74,6 +75,7 @@ class ModelBuilder:
         run_timeout: int = 1800,
         callbacks: List[Callback] = None,
         enable_checkpointing: bool = False,
+        _custom_emitter: Optional[object] = None,
     ):
         """
         Build a complete ML model using the agentic workflow.
@@ -81,6 +83,7 @@ class ModelBuilder:
         Args:
             intent: Natural language description of the model's purpose
             datasets: Training datasets
+            db_connection_string: Optional database connection string for Relational Deep Learning
             input_schema: Optional input schema (inferred if not provided)
             output_schema: Optional output schema (inferred if not provided)
             timeout: Maximum total time for building
@@ -88,6 +91,7 @@ class ModelBuilder:
             run_timeout: Maximum time per training run
             callbacks: Optional callbacks for monitoring
             enable_checkpointing: Whether to enable checkpointing
+            _custom_emitter: Internal use only - custom emitter for chain of thought
 
         Returns:
             Completed Model instance
@@ -96,11 +100,14 @@ class ModelBuilder:
         object_registry = ObjectRegistry()
         object_registry.clear()
 
-        if (datasets is None) or (len(datasets) == 0):
-            print("No datasets provided")
-            raise ValueError("At least one dataset must be provided for model building")
+        if (datasets is None or len(datasets) == 0) and not db_connection_string:
+            print("No datasets or database connection provided")
+            raise ValueError("At least one dataset or a database connection must be provided for model building")
         else:
-            print(f"Building model with {len(datasets)} dataset(s)")
+            if datasets:
+                print(f"Building model with {len(datasets)} dataset(s)")
+            if db_connection_string:
+                print(f"Building model with database connection: {db_connection_string}")
 
         # Validate parameters
         if timeout is None and max_iterations is None:
@@ -120,7 +127,9 @@ class ModelBuilder:
         if enable_checkpointing and not any(isinstance(cb, ModelCheckpointCallback) for cb in callbacks):
             callbacks.append(ModelCheckpointCallback())
 
-        cot_callback = ChainOfThoughtModelCallback(emitter=ConsoleEmitter())
+        # Use custom emitter if provided, otherwise default to ConsoleEmitter
+        emitter = _custom_emitter or ConsoleEmitter()
+        cot_callback = ChainOfThoughtModelCallback(emitter=emitter)
         callbacks.append(cot_callback)
         cot_callable = cot_callback.get_chain_of_thought_callable()
 
@@ -129,11 +138,13 @@ class ModelBuilder:
 
         try:
             # Register datasets
-            training_data = {
-                f"dataset_{i}": DatasetAdapter.coerce((data.data if isinstance(data, DatasetGenerator) else data))
-                for i, data in enumerate(datasets)
-            }
-            object_registry.register_multiple(TabularConvertible, training_data, immutable=True)
+            training_data = {}
+            if datasets:
+                training_data = {
+                    f"dataset_{i}": DatasetAdapter.coerce((data.data if isinstance(data, DatasetGenerator) else data))
+                    for i, data in enumerate(datasets)
+                }
+                object_registry.register_multiple(TabularConvertible, training_data, immutable=True)
 
             # Register schemas if provided
             if input_schema:
@@ -180,6 +191,9 @@ class ModelBuilder:
                 resume=False,
             )
 
+            if db_connection_string:
+                agent_prompt += f"\n\nDatabase Connection String: {db_connection_string}\nUse this connection to extract schema and build graph."
+
             additional_args = {
                 "intent": intent,
                 "working_dir": self.working_dir,
@@ -188,6 +202,7 @@ class ModelBuilder:
                 "max_iterations": max_iterations,
                 "timeout": timeout,
                 "run_timeout": run_timeout,
+                "db_connection_string": db_connection_string,
             }
 
             generated = agent.run(agent_prompt, additional_args=additional_args)
