@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 
 @tool
 def register_global_schemas(
-    input_schema: Dict[str, str], output_schema: Dict[str, str], reasoning: str
+    input_schema: Dict[str, Any], output_schema: Dict[str, Any], reasoning: str
 ) -> Dict[str, str]:
     """
     Register input and output schemas that should be used by all models built for all solutions.
 
     Args:
-        input_schema: Finalized input schema as field:type dictionary
-        output_schema: Finalized output schema as field:type dictionary
+        input_schema: Finalized input schema. Can be a field:type dictionary or a complex schema definition (e.g. for graphs).
+        output_schema: Finalized output schema. Can be a field:type dictionary or a complex schema definition.
         reasoning: Explanation of schema design decisions
 
     Returns:
@@ -37,12 +37,16 @@ def register_global_schemas(
     object_registry = ObjectRegistry()
 
     # Validate schemas by attempting to convert them to Pydantic models
+    # We use a relaxed validation to support complex schemas
     try:
         map_to_basemodel("InputSchema", input_schema)
         map_to_basemodel("OutputSchema", output_schema)
     except Exception as e:
+        # If validation fails, we log it but might still want to register if it's a complex object
+        # However, map_to_basemodel is now relaxed, so failure means it's really broken.
         error_msg = f"Schema validation or registration failed: {str(e)}"
         logger.error(error_msg)
+        # For now, we still raise to ensure some sanity, but map_to_basemodel is more permissive.
         raise ValueError(error_msg) from e
 
     # Register input schema if possible; global schemas are typically registered once

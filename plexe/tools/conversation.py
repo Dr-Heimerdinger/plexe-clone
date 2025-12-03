@@ -5,6 +5,7 @@ These tools support the conversational agent in helping users define their ML
 requirements and starting model builds when ready.
 """
 
+import json
 import logging
 import os
 from datetime import datetime
@@ -21,9 +22,36 @@ from plexe.internal.common.datasets.interface import TabularConvertible
 from plexe.internal.common.provider import ProviderConfig
 from plexe.core.object_registry import ObjectRegistry
 from plexe.internal.models.callbacks.mlflow import MLFlowCallback
-from plexe.internal.common.utils.chain_of_thought import get_current_emitter
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_schema(schema: Any) -> Optional[Dict]:
+    """
+    Parse a schema that may be provided as a dict, JSON string, or None.
+    
+    Args:
+        schema: The schema to parse (dict, JSON string, or None)
+        
+    Returns:
+        Parsed dictionary or None
+    """
+    if schema is None:
+        return None
+    if isinstance(schema, dict):
+        return schema
+    if isinstance(schema, str):
+        try:
+            parsed = json.loads(schema)
+            if isinstance(parsed, dict):
+                return parsed
+            logger.warning(f"Schema string parsed but is not a dict: {type(parsed)}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.warning(f"Could not parse schema string as JSON: {e}")
+            return None
+    logger.warning(f"Unexpected schema type: {type(schema)}")
+    return None
 
 
 @tool
@@ -96,14 +124,18 @@ def validate_db_connection(connection_string: str) -> Dict[str, Any]:
         engine = create_engine(connection_string)
         inspector = inspect(engine)
         table_names = inspector.get_table_names()
-
+        
         return {
             "valid": True,
             "tables": table_names,
-            "message": f"Successfully connected. Found {len(table_names)} tables: {', '.join(table_names[:5])}...",
+            "message": f"Successfully connected. Found {len(table_names)} tables: {', '.join(table_names[:5])}..."
         }
     except Exception as e:
-        return {"valid": False, "error": str(e), "message": f"Failed to connect to database: {str(e)}"}
+        return {
+            "valid": False,
+            "error": str(e),
+            "message": f"Failed to connect to database: {str(e)}"
+        }
 
 
 @tool
@@ -111,8 +143,8 @@ def initiate_model_build(
     intent: str,
     dataset_file_paths: List[str] = [],
     db_connection_string: Optional[str] = None,
-    input_schema: Optional[Dict] = None,
-    output_schema: Optional[Dict] = None,
+    input_schema: Optional[Any] = None,
+    output_schema: Optional[Any] = None,
     n_solutions_to_try: int = 1,
 ) -> Dict[str, str]:
     """
@@ -122,19 +154,23 @@ def initiate_model_build(
         intent: Natural language description of what the model should do
         dataset_file_paths: List of file paths to dataset files (CSV or Parquet). Optional if db_connection_string is provided.
         db_connection_string: Database connection string for Relational Deep Learning. Optional if dataset_file_paths is provided.
-        input_schema: The input schema for the model, as a flat field:type dictionary; leave None if not known
-        output_schema: The output schema for the model, as a flat field:type dictionary; leave None if not known
+        input_schema: The input schema for the model. Can be a flat field:type dictionary or a JSON string. For complex schemas (e.g. graphs), leave None and describe in intent.
+        output_schema: The output schema for the model. Can be a flat field:type dictionary or a JSON string. For complex schemas (e.g. graphs), leave None and describe in intent.
         n_solutions_to_try: Number of model solutions to try, out of which the best will be selected
 
     Returns:
         Dictionary with build initiation status and details
     """
     try:
+        # Parse schemas (handle dict, JSON string, or None)
+        parsed_input_schema = _parse_schema(input_schema)
+        parsed_output_schema = _parse_schema(output_schema)
+        
         # Validate inputs
         if not dataset_file_paths and not db_connection_string:
             return {
                 "status": "failed",
-                "message": "Either dataset_file_paths or db_connection_string must be provided.",
+                "message": "Either dataset_file_paths or db_connection_string must be provided."
             }
 
         # Validate files if provided
@@ -153,7 +189,10 @@ def initiate_model_build(
         if db_connection_string:
             db_result = validate_db_connection(db_connection_string)
             if not db_result["valid"]:
-                return {"status": "failed", "message": f"Invalid database connection: {db_result['error']}"}
+                return {
+                    "status": "failed",
+                    "message": f"Invalid database connection: {db_result['error']}"
+                }
 
         # Load datasets into DataFrames (if any)
         datasets = []
@@ -171,15 +210,7 @@ def initiate_model_build(
         # Import here to avoid circular dependencies
         from plexe.model_builder import ModelBuilder
 
-        gemini_model = "gemini/gemini-2.5-flash"
-
-        # Get the emitter from context variable (set by the server)
-        # This allows sub-agents to share the same WebSocket emitter
-        custom_emitter = get_current_emitter()
-        if custom_emitter:
-            logger.info("Found emitter in context, will pass to ModelBuilder")
-        else:
-            logger.warning("No emitter found in context, ModelBuilder will use default ConsoleEmitter")
+        gemini_model = "gemini/gemini-2.5-pro"
 
         model_builder = ModelBuilder(
             provider=ProviderConfig(
@@ -215,12 +246,10 @@ def initiate_model_build(
             intent=intent,
             datasets=datasets,
             db_connection_string=db_connection_string,
-            input_schema=input_schema,
-            output_schema=output_schema,
+            input_schema=parsed_input_schema,
+            output_schema=parsed_output_schema,
             max_iterations=n_solutions_to_try,
             callbacks=callbacks if callbacks else None,
-            # Pass the emitter from context variable
-            _custom_emitter=custom_emitter,
         )
 
         plexe.save_model(model, "model-from-chat.tar.gz")

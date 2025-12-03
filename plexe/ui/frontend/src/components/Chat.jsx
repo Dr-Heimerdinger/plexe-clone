@@ -25,37 +25,56 @@ function Message({ msg }) {
     )
 }
 
-export default function Chat({ messages, status, onSendMessage, isProcessing }) {
+function ThinkingIndicator() {
+    return (
+        <div className="message assistant">
+            <div className="bubble thinking-indicator">
+                <div className="dot-typing">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default function Chat({ messages, status, isProcessing, onSendMessage }) {
     const [input, setInput] = useState('')
     const messagesEndRef = useRef(null)
 
-    // Auto-scroll to bottom when messages change
+    // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages, isProcessing])
 
     const send = () => {
-        if (!input.trim()) return
-        onSendMessage(input)
-        setInput('')
+        if (onSendMessage(input)) {
+            setInput('')
+        }
+    }
+
+    const getStatusClass = () => {
+        if (isProcessing) return 'processing'
+        return status
+    }
+
+    const getStatusText = () => {
+        if (isProcessing) return 'Processing...'
+        if (status === 'connected') return 'Connected'
+        if (status === 'disconnected') return 'Disconnected - Reconnecting...'
+        if (status === 'error') return 'Connection Error'
+        return status
     }
 
     return (
         <div className="chat-root">
-            <div className="status">Status: {status}</div>
+            <div className={`status ${getStatusClass()}`}>{getStatusText()}</div>
             <div className="messages">
                 {messages.map((m, i) => (
                     <Message key={i} msg={m} />
                 ))}
-                {isProcessing && (
-                    <div className="message thinking-indicator">
-                        <div className="bubble processing">
-                            <span className="dot"></span>
-                            <span className="dot"></span>
-                            <span className="dot"></span>
-                        </div>
-                    </div>
-                )}
+                {isProcessing && <ThinkingIndicator />}
                 <div ref={messagesEndRef} />
             </div>
             <div className="composer">
@@ -68,9 +87,11 @@ export default function Chat({ messages, status, onSendMessage, isProcessing }) 
                         }
                     }}
                     placeholder="Type your message..."
-                    disabled={isProcessing}
+                    disabled={isProcessing || status !== 'connected'}
                 />
-                <button onClick={send} disabled={isProcessing}>Send</button>
+                <button onClick={send} disabled={isProcessing || status !== 'connected'}>
+                    {isProcessing ? 'Processing...' : 'Send'}
+                </button>
             </div>
         </div>
     )

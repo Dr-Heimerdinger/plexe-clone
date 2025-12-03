@@ -92,6 +92,146 @@ def register_split_datasets(
     }
 
 
+@tool
+def export_datasets(
+    output_dir: str,
+    format: str = "csv",
+    include_metadata: bool = True,
+) -> Dict[str, Any]:
+    """
+    Export registered train, validation, and test datasets to files (CSV or Parquet).
+    This tool allows agents to persist datasets to disk for external analysis, reproducibility,
+    or manual inspection by users.
+
+    Args:
+        output_dir: Directory path where datasets will be saved (relative to session workdir or absolute).
+        format: Output format - 'csv', 'parquet', or 'both'. Defaults to 'csv'.
+        include_metadata: Whether to save a metadata JSON file with dataset info. Defaults to True.
+
+    Returns:
+        Dictionary containing:
+        - exported_files: List of paths to exported files
+        - dataset_stats: Statistics for each exported dataset (rows, columns, label distribution if present)
+        - metadata_file: Path to metadata file (if include_metadata=True)
+    """
+    import json
+    import os
+    from datetime import datetime
+    from pathlib import Path
+
+    object_registry = ObjectRegistry()
+
+    # Determine output directory
+    try:
+        session_id = object_registry.get(str, "session_id")
+        base_workdir = os.path.join("workdir", session_id)
+    except KeyError:
+        base_workdir = "workdir"
+
+    if os.path.isabs(output_dir):
+        export_path = Path(output_dir)
+    else:
+        export_path = Path(base_workdir) / output_dir
+
+    export_path.mkdir(parents=True, exist_ok=True)
+
+    # Find all train/val/test datasets
+    all_datasets = object_registry.list_by_type(TabularConvertible)
+
+    splits_to_export = {}
+    for name in all_datasets:
+        if name.endswith("_train"):
+            splits_to_export.setdefault("train", []).append(name)
+        elif name.endswith("_val"):
+            splits_to_export.setdefault("validation", []).append(name)
+        elif name.endswith("_test"):
+            splits_to_export.setdefault("test", []).append(name)
+
+    if not splits_to_export:
+        raise ValueError(
+            "No train/val/test datasets found in registry. "
+            "Ensure datasets have been split using register_split_datasets first."
+        )
+
+    exported_files = []
+    dataset_stats = {}
+
+    for split_type, dataset_names in splits_to_export.items():
+        # Prefer transformed versions if available
+        transformed = [n for n in dataset_names if "_transformed_" in n]
+        chosen_name = transformed[0] if transformed else dataset_names[0]
+
+        try:
+            dataset = object_registry.get(TabularConvertible, chosen_name)
+            df = dataset.to_pandas()
+
+            # Calculate stats
+            stats = {
+                "dataset_name": chosen_name,
+                "rows": len(df),
+                "columns": len(df.columns),
+                "column_names": list(df.columns),
+            }
+
+            # Check for label column and compute distribution
+            label_cols = [c for c in df.columns if c.lower() in ("label", "target", "y")]
+            if label_cols:
+                label_col = label_cols[0]
+                value_counts = df[label_col].value_counts().to_dict()
+                stats["label_column"] = label_col
+                stats["label_distribution"] = {str(k): int(v) for k, v in value_counts.items()}
+
+            dataset_stats[split_type] = stats
+
+            # Export based on format
+            base_filename = f"{split_type}"
+            if format in ("csv", "both"):
+                csv_path = export_path / f"{base_filename}.csv"
+                df.to_csv(csv_path, index=False)
+                exported_files.append(str(csv_path))
+                logger.info(f"✅ Exported {split_type} dataset to {csv_path}")
+
+            if format in ("parquet", "both"):
+                parquet_path = export_path / f"{base_filename}.parquet"
+                df.to_parquet(parquet_path, index=False)
+                exported_files.append(str(parquet_path))
+                logger.info(f"✅ Exported {split_type} dataset to {parquet_path}")
+
+
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to export {split_type} dataset ({chosen_name}): {str(e)}")
+            dataset_stats[split_type] = {"error": str(e)}
+
+    result = {
+        "exported_files": exported_files,
+        "dataset_stats": dataset_stats,
+        "output_directory": str(export_path),
+    }
+
+    # Save metadata
+    if include_metadata and exported_files:
+        metadata = {
+            "export_timestamp": datetime.now().isoformat(),
+            "format": format,
+            "datasets": dataset_stats,
+        }
+
+        # Try to include temporal split info if available
+        try:
+            temporal_info = object_registry.get(dict, "temporal_split_info")
+            metadata["temporal_split_info"] = temporal_info
+        except KeyError:
+            pass
+
+        metadata_path = export_path / "metadata.json"
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2, default=str)
+        result["metadata_file"] = str(metadata_path)
+        logger.info(f"✅ Saved metadata to {metadata_path}")
+
+    return result
+
+
 # TODO: does not need to be a tool
 @tool
 def create_input_sample(n_samples: int = 5) -> bool:

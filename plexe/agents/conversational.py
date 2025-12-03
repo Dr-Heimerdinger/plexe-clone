@@ -46,7 +46,7 @@ class ConversationalAgent:
         # 1. explicit `model_id` argument
         # 2. env var `PLEXE_CONVERSATIONAL_MODEL`
         # 3. automatic selection based on available API keys
-        #    - GEMINI -> gemini/gemini-2.5-flash
+        #    - GEMINI -> gemini/gemini-2.5-pro
         #    - OPENAI -> openai/gpt-4o-mini
         #    - ANTHROPIC -> anthropic/claude-sonnet-4-20250514
         # 4. fallback to anthropic default
@@ -59,7 +59,7 @@ class ConversationalAgent:
         else:
             # Auto-detect from available API keys
             if os.environ.get("GEMINI_API_KEY"):
-                self.model_id = "gemini/gemini-2.5-flash"
+                self.model_id = "gemini/gemini-2.5-pro"
             elif os.environ.get("OPENAI_API_KEY"):
                 self.model_id = "openai/gpt-4o-mini"
             elif os.environ.get("ANTHROPIC_API_KEY"):

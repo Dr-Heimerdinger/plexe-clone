@@ -45,7 +45,7 @@ def setup_env():
     # Create build info for different stages
     build_info = BuildStateInfo(
         intent="Predict house prices",
-        provider="gemini/gemini-2.5-flash",
+        provider="gemini/gemini-2.5-pro",
         input_schema=InputSchema,
         output_schema=OutputSchema,
         run_timeout=300,
@@ -57,7 +57,7 @@ def setup_env():
     # Create iteration info with node
     iteration_info = BuildStateInfo(
         intent="Predict house prices",
-        provider="gemini/gemini-2.5-flash",
+        provider="gemini/gemini-2.5-pro",
         input_schema=InputSchema,
         output_schema=OutputSchema,
         run_timeout=300,

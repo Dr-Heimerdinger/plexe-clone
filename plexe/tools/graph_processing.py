@@ -27,6 +27,7 @@ def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
         A dictionary containing schema metadata:
         - 'tables': Dict[table_name, List[Dict[col_name, type, is_pk]]]
         - 'relationships': List[Dict[source_table, source_col, target_table, target_col]]
+        - 'foreign_keys': Same as 'relationships' (alias for backwards compatibility)
     """
     try:
         engine = create_engine(db_connection)
@@ -63,6 +64,9 @@ def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
                         }
                     )
 
+        # Add alias for backwards compatibility (agents may reference 'foreign_keys')
+        schema_info["foreign_keys"] = schema_info["relationships"]
+
         return schema_info
 
     except Exception as e:
@@ -70,13 +74,15 @@ def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
 
 
 @tool
-def build_hetero_graph(nodes: Dict[str, torch.Tensor], edges: Dict[Tuple[str, str, str], torch.Tensor]) -> Any:
+def build_hetero_graph(nodes: Dict[str, Any], edges: Dict[Tuple[str, str, str], torch.Tensor]) -> Any:
     """
     Builds a PyTorch Geometric HeteroData object from processed node features and edge indices.
 
     Args:
-        nodes: Dictionary mapping node_type (table_name) to feature tensors (x).
-               Example: {'user': tensor([...]), 'product': tensor([...])}
+        nodes: Dictionary mapping node_type (table_name) to either:
+               - A feature tensor directly (torch.Tensor), OR
+               - A dict with 'x' (features) and optionally 't' (timestamps) keys
+               Example: {'user': tensor([...])} or {'user': {'x': tensor, 't': tensor}}
         edges: Dictionary mapping edge_type (source, relation, target) to edge_index tensors (2, num_edges).
                Example: {('user', 'reviews', 'product'): tensor([[0, 1...], [1, 2...]])}
 
@@ -86,21 +92,66 @@ def build_hetero_graph(nodes: Dict[str, torch.Tensor], edges: Dict[Tuple[str, st
     try:
         data = HeteroData()
 
-        # 1. Add Node Features
-        for node_type, x_tensor in nodes.items():
-            # Ensure it is a float tensor for features
-            if not isinstance(x_tensor, torch.Tensor):
-                x_tensor = torch.tensor(x_tensor, dtype=torch.float)
-            data[node_type].x = x_tensor
-            # We can also infer num_nodes
-            data[node_type].num_nodes = x_tensor.shape[0]
+        # 1. Add Node Features (supports both tensor and dict formats)
+        for node_type, node_data in nodes.items():
+            # Handle both dict format {'x': tensor, 't': tensor} and direct tensor format
+            if isinstance(node_data, dict):
+                x_tensor = node_data.get('x')
+                t_tensor = node_data.get('t')
+            else:
+                x_tensor = node_data
+                t_tensor = None
+
+            # Process feature tensor
+            if x_tensor is not None:
+                if not isinstance(x_tensor, torch.Tensor):
+                    try:
+                        x_tensor = torch.tensor(x_tensor, dtype=torch.float)
+                    except (ValueError, TypeError) as e:
+                        # Handle case where x_tensor might be a nested structure
+                        if isinstance(x_tensor, (list, np.ndarray)):
+                            x_tensor = torch.tensor(np.array(x_tensor, dtype=np.float32), dtype=torch.float)
+                        else:
+                            raise ValueError(f"Cannot convert node features for '{node_type}' to tensor: {e}")
+                data[node_type].x = x_tensor
+                data[node_type].num_nodes = x_tensor.shape[0]
+
+            # Process timestamp tensor (for temporal RDL)
+            if t_tensor is not None:
+                if not isinstance(t_tensor, torch.Tensor):
+                    try:
+                        t_tensor = torch.tensor(t_tensor, dtype=torch.float)
+                    except (ValueError, TypeError) as e:
+                        if isinstance(t_tensor, (list, np.ndarray)):
+                            t_tensor = torch.tensor(np.array(t_tensor, dtype=np.float32), dtype=torch.float)
+                        else:
+                            raise ValueError(f"Cannot convert timestamps for '{node_type}' to tensor: {e}")
+                data[node_type].t = t_tensor  # Temporal attribute for time-aware sampling
 
         # 2. Add Edge Indices
         for edge_key, edge_index in edges.items():
+            # Validate edge_key format
+            if not isinstance(edge_key, tuple) or len(edge_key) != 3:
+                print(f"Warning: Skipping invalid edge key format: {edge_key}")
+                continue
+
             # edge_key is expected to be (source_type, relation_name, target_type)
             # edge_index should be shape (2, num_edges) and type long
+            if edge_index is None:
+                print(f"Warning: Skipping None edge_index for {edge_key}")
+                continue
+
             if not isinstance(edge_index, torch.Tensor):
-                edge_index = torch.tensor(edge_index, dtype=torch.long)
+                try:
+                    edge_index = torch.tensor(edge_index, dtype=torch.long)
+                except (ValueError, TypeError) as e:
+                    print(f"Warning: Cannot convert edge_index for {edge_key}: {e}")
+                    continue
+
+            # Validate edge_index shape
+            if edge_index.dim() != 2 or edge_index.shape[0] != 2:
+                print(f"Warning: Invalid edge_index shape {edge_index.shape} for {edge_key}, expected (2, num_edges)")
+                continue
 
             # PyG expects standard formatting
             src_type, rel, dst_type = edge_key
@@ -114,7 +165,8 @@ def build_hetero_graph(nodes: Dict[str, torch.Tensor], edges: Dict[Tuple[str, st
         return data
 
     except Exception as e:
-        return f"Error building HeteroData: {str(e)}"
+        import traceback
+        return f"Error building HeteroData: {str(e)}\nTraceback: {traceback.format_exc()}"
 
 
 @tool

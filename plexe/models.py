@@ -141,7 +141,7 @@ class Model:
     def build(
         self,
         datasets: List[pd.DataFrame | DatasetGenerator],
-        provider: str | ProviderConfig = "gemini/gemini-2.5-flash",
+        provider: str | ProviderConfig = "gemini/gemini-2.5-pro",
         timeout: int = None,
         max_iterations: int = None,
         run_timeout: int = 1800,

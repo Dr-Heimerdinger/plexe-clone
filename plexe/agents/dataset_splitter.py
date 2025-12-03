@@ -13,7 +13,7 @@ from smolagents import CodeAgent, LiteLLMModel
 
 from plexe.config import config
 from plexe.internal.common.utils.agents import get_prompt_templates
-from plexe.tools.datasets import get_dataset_preview, register_split_datasets, get_latest_datasets, get_dataset_reports
+from plexe.tools.datasets import get_dataset_preview, register_split_datasets, get_latest_datasets, get_dataset_reports, export_datasets
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,7 @@ class DatasetSplitterAgent:
                 register_split_datasets,
                 get_latest_datasets,
                 get_dataset_reports,
+                export_datasets,
             ],
             planning_interval=5,
             add_base_tools=False,

@@ -145,6 +145,47 @@ body,
     color: var(--muted);
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+
+.status.connected::before {
+    background: var(--success);
+}
+
+.status.disconnected::before {
+    background: var(--error);
+    animation: pulse 1.5s infinite;
+}
+
+.status.processing::before {
+    background: var(--primary);
+    animation: pulse 1s infinite;
+}
+
+.status.error::before {
+    background: var(--error);
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
 }
 
 .messages {
@@ -228,46 +269,52 @@ body,
     white-space: pre-wrap;
 }
 
-/* Processing Indicator */
-.message.thinking-indicator {
-    justify-content: flex-start;
-    margin-bottom: 1rem;
-}
-
-.bubble.processing {
-    background: #e5e7eb;
-    padding: 0.75rem 1.25rem;
-    border-radius: 0 12px 12px 12px;
-    display: flex;
+/* Thinking/Typing indicator (3 dots animation) */
+.thinking-indicator {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
+    padding: 0.75rem 1rem !important;
     min-width: 60px;
-    justify-content: center;
 }
 
-.dot {
+.dot-typing {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.dot-typing span {
     width: 8px;
     height: 8px;
-    background-color: #6b7280;
     border-radius: 50%;
-    display: inline-block;
-    animation: bounce 1.4s infinite ease-in-out both;
+    background-color: var(--primary);
+    animation: dotTyping 1.4s infinite ease-in-out both;
 }
 
-.dot:nth-child(1) {
+.dot-typing span:nth-child(1) {
     animation-delay: -0.32s;
 }
 
-.dot:nth-child(2) {
+.dot-typing span:nth-child(2) {
     animation-delay: -0.16s;
 }
 
-@keyframes bounce {
-    0%, 80%, 100% { 
-        transform: scale(0);
-    } 
-    40% { 
-        transform: scale(1.0);
+.dot-typing span:nth-child(3) {
+    animation-delay: 0s;
+}
+
+@keyframes dotTyping {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0.6);
+        opacity: 0.5;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
     }
 }
 
@@ -311,6 +358,18 @@ body,
 
 .composer button:active {
     transform: scale(0.98);
+}
+
+.composer input:disabled {
+    background: #f3f4f6;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.composer button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 /* ===== Dataset Page ===== */

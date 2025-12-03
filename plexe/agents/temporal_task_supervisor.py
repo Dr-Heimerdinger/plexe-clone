@@ -13,6 +13,7 @@ from plexe.tools.temporal_processing import (
     generate_training_table_sql,
     temporal_split,
     validate_temporal_consistency,
+    generate_temporal_splits_from_db,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,13 +45,14 @@ class TemporalTaskSupervisorAgent:
             name="TemporalTaskSupervisor",
             description=(
                 "Guardian of temporal integrity and causality in the RDL pipeline. "
-                "Constructs Training Tables and enforces Time-Consistent Splitting."
+                "Constructs Training Tables, enforces Time-Consistent Splitting, and can export datasets to files."
             ),
             model=LiteLLMModel(model_id=self.model_id),
             tools=[
                 generate_training_table_sql,
                 temporal_split,
                 validate_temporal_consistency,
+                generate_temporal_splits_from_db,
             ],
             prompt_templates=get_prompt_templates(
                 base_template_name="code_agent.yaml",

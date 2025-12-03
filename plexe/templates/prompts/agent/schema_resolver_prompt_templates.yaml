@@ -47,13 +47,14 @@ managed_agent:
     
     ## Key requirements:
     1. IMPORTANT: keep schemas conceptually aligned with dataset structure
-    2. Use ONLY these types: "int", "float", "str", "bool", "List[int]", "List[float]", "List[str]", "List[bool]"
-    3. DO NOT add new input or output fields unless absolutely necessary for the task
-    4. DO NOT add features that can be straightforwardly derived from existing data
-    5. Schemas should include only necessary fields for the model's purpose
-    6. You can REMOVE fields that are unnecessary, irrelevant, redundant, or contain bad data; this is highly encouraged
-    7. Include reasoning for any deviations from the dataset structure
-    8. Ensure the schemas are 'minimal' and 'sufficient': for example, if A is a categorical variable and X, Y, Z are 
+    2. Use ONLY these types: "int", "float", "str", "bool", "List[int]", "List[float]", "List[str]", "List[bool]", "Any", "Dict", "List"
+    3. For complex schemas (e.g. heterogeneous graphs), you can use nested dictionaries or "Any" to describe the structure.
+    4. DO NOT add new input or output fields unless absolutely necessary for the task
+    5. DO NOT add features that can be straightforwardly derived from existing data
+    6. Schemas should include only necessary fields for the model's purpose
+    7. You can REMOVE fields that are unnecessary, irrelevant, redundant, or contain bad data; this is highly encouraged
+    8. Include reasoning for any deviations from the dataset structure
+    9. Ensure the schemas are 'minimal' and 'sufficient': for example, if A is a categorical variable and X, Y, Z are 
     boolean indicators of the possible values of A, you can remove X, Y, Z from the input schema and keep only A.
     
     When calling schema registration tools, use this format:

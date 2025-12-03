@@ -27,6 +27,7 @@ from plexe.internal.common.utils.pydantic_utils import map_to_basemodel, format_
 from plexe.internal.common.utils.markdown_utils import format_eda_report_markdown
 from plexe.core.state import ModelState
 from plexe.tools.schemas import get_solution_schemas
+from plexe.execution_context import get_chain_of_thought_callable
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class ModelBuilder:
 
     def __init__(
         self,
-        provider: str | ProviderConfig = "gemini/gemini-2.5-flash",
+        provider: str | ProviderConfig = "gemini/gemini-2.5-pro",
         verbose: bool = False,
         distributed: bool = False,
         working_dir: Optional[str] = None,
@@ -75,7 +76,6 @@ class ModelBuilder:
         run_timeout: int = 1800,
         callbacks: List[Callback] = None,
         enable_checkpointing: bool = False,
-        _custom_emitter: Optional[object] = None,
     ):
         """
         Build a complete ML model using the agentic workflow.
@@ -91,7 +91,6 @@ class ModelBuilder:
             run_timeout: Maximum time per training run
             callbacks: Optional callbacks for monitoring
             enable_checkpointing: Whether to enable checkpointing
-            _custom_emitter: Internal use only - custom emitter for chain of thought
 
         Returns:
             Completed Model instance
@@ -127,11 +126,19 @@ class ModelBuilder:
         if enable_checkpointing and not any(isinstance(cb, ModelCheckpointCallback) for cb in callbacks):
             callbacks.append(ModelCheckpointCallback())
 
-        # Use custom emitter if provided, otherwise default to ConsoleEmitter
-        emitter = _custom_emitter or ConsoleEmitter()
-        cot_callback = ChainOfThoughtModelCallback(emitter=emitter)
-        callbacks.append(cot_callback)
-        cot_callable = cot_callback.get_chain_of_thought_callable()
+        # Check for context-provided chain of thought
+        context_cot_callable = get_chain_of_thought_callable()
+        
+        if context_cot_callable and hasattr(context_cot_callable, 'emitter'):
+            # Use the emitter from the context
+            cot_callback = ChainOfThoughtModelCallback(emitter=context_cot_callable.emitter)
+            callbacks.append(cot_callback)
+            cot_callable = context_cot_callable
+        else:
+            # Fallback to console emitter
+            cot_callback = ChainOfThoughtModelCallback(emitter=ConsoleEmitter())
+            callbacks.append(cot_callback)
+            cot_callable = cot_callback.get_chain_of_thought_callable()
 
         # Register callbacks
         object_registry.register_multiple(Callback, {f"{i}": c for i, c in enumerate(callbacks)})
@@ -145,6 +152,11 @@ class ModelBuilder:
                     for i, data in enumerate(datasets)
                 }
                 object_registry.register_multiple(TabularConvertible, training_data, immutable=True)
+
+            # Register database connection string if provided (for RDL tasks)
+            if db_connection_string:
+                object_registry.register(str, "db_connection_string", db_connection_string, immutable=True)
+                logger.info(f"Registered database connection string for RDL pipeline")
 
             # Register schemas if provided
             if input_schema:
