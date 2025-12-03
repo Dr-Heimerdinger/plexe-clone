@@ -34,7 +34,7 @@ class ProviderConfig:
 
     def __init__(
         self,
-        default_provider: str = "gemini/gemini-2.5-pro",
+        default_provider: str = "openai/gpt-oss-20b",
         orchestrator_provider: Optional[str] = None,
         research_provider: Optional[str] = None,
         engineer_provider: Optional[str] = None,
@@ -70,7 +70,7 @@ class Provider:
     """
 
     def __init__(self, model: str = None):
-        default_model = "gemini/gemini-2.5-pro"
+        default_model = "openai/gpt-oss-20b"
         self.model = model or default_model
         if "/" not in self.model:
             self.model = default_model

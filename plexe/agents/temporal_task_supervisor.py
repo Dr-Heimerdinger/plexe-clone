@@ -10,9 +10,12 @@ from smolagents import CodeAgent, LiteLLMModel
 from plexe.config import config
 from plexe.internal.common.utils.agents import get_prompt_templates
 from plexe.tools.temporal_processing import (
+    discover_temporal_columns,
+    execute_sql_query,
     generate_training_table_sql,
     temporal_split,
     validate_temporal_consistency,
+    create_temporal_dataset,
     generate_temporal_splits_from_db,
 )
 
@@ -45,20 +48,23 @@ class TemporalTaskSupervisorAgent:
             name="TemporalTaskSupervisor",
             description=(
                 "Guardian of temporal integrity and causality in the RDL pipeline. "
-                "Constructs Training Tables, enforces Time-Consistent Splitting, and can export datasets to files."
+                "Discovers temporal schema, constructs Training Tables, and enforces Time-Consistent Splitting. "
+                "Works with any relational database schema."
             ),
             model=LiteLLMModel(model_id=self.model_id),
             tools=[
+                discover_temporal_columns,
+                execute_sql_query,
                 generate_training_table_sql,
                 temporal_split,
                 validate_temporal_consistency,
+                create_temporal_dataset,
                 generate_temporal_splits_from_db,
             ],
             prompt_templates=get_prompt_templates(
                 base_template_name="code_agent.yaml",
                 override_template_name="temporal_task_supervisor_prompt_templates.yaml",
             ),
-            # verbose=verbose, # Removed verbose argument
             verbosity_level=self.verbosity,
             add_base_tools=False,
             additional_authorized_imports=config.code_generation.authorized_agent_imports

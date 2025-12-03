@@ -141,7 +141,7 @@ class Model:
     def build(
         self,
         datasets: List[pd.DataFrame | DatasetGenerator],
-        provider: str | ProviderConfig = "gemini/gemini-2.5-pro",
+        provider: str | ProviderConfig = "openai/gpt-oss-20b",
         timeout: int = None,
         max_iterations: int = None,
         run_timeout: int = 1800,

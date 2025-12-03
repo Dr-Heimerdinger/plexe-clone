@@ -4,9 +4,12 @@
 # litellm-settings.yaml
 litellm_settings:
   set_verbose: True
-  cache: True
-  cache_kwargs:
-    type: "local"
-    max_size: 1000
+  cache: False
   drop_params: True
   num_retries: 2
+model_list:
+  - model_name: gpt-oss-20b
+    litellm_params: 
+      model: openai/gpt-oss-20b
+      api_base: https://qllm.iselab.info/v1
+      api_key: none # does os.getenv("AZURE_API_KEY_EU")

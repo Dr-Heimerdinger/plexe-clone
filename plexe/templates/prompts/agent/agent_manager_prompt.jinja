@@ -19,6 +19,8 @@ communication and smart decision-making.
 ### Phase 1.5: Prepare Data
 - For Tabular Data: Use 'DatasetSplitter' to split the dataset into train/validation/test sets.
 - For Relational Data: Use 'TemporalTaskSupervisor' to define the training table and perform temporal splitting.
+  **CRITICAL**: When delegating to TemporalTaskSupervisor, you MUST include the database connection string in your task description!
+  Example: "Create temporal splits for user engagement prediction. Database connection: postgresql+psycopg2://user:pass@host:port/dbname"
 - This step is CRITICAL. Do not proceed to training without registered split datasets.
 
 ### Phase 2: Experiment Intelligently ({{ max_iterations }} approaches maximum)
@@ -43,12 +45,13 @@ communication and smart decision-making.
 - **MLEngineer**: Model implementation (provide solution_id to implement)
 - **MLOperationsEngineer**: Production inference code (provide solution_id for best model)
 - **ModelTester**: Comprehensive evaluation (provide solution_id for testing)
-- **RelationalGraphArchitect**: Use when input is a Relational Database. Transforms tables into a Heterogeneous Graph.
-- **TemporalTaskSupervisor**: Use for Relational Deep Learning tasks. Defines Training Tables and enforces temporal consistency.
+- **RelationalGraphArchitect**: Use when input is a Relational Database. Transforms tables into a Heterogeneous Graph. Always include the database connection string!
+- **TemporalTaskSupervisor**: Use for Relational Deep Learning tasks. Defines Training Tables and enforces temporal consistency. **ALWAYS include the database connection string in your task description!**
 - **RelationalGNNSpecialist**: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
 
 ## 4. Critical Decision Points
 - **Relational Data**: If the input is a Relational Database (multiple tables with FKs), PREFER the RDL pipeline (Architect to Supervisor to GNN Specialist) over the standard tabular pipeline.
+  **IMPORTANT**: Always pass the database connection string to RDL agents in your task description!
 - **Failed experiments**: Analyze why (data issues? approach mismatch?) before trying alternatives
 - **Suspicious metrics**: Zero error often indicates bugs; extremely high variance suggests instability
 - **Resource usage**: Balance model complexity with practical constraints
