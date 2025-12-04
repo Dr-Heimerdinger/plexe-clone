@@ -23,16 +23,21 @@ managed_agent:
        - Use this to explore the data, understand relationships, and build custom queries
        - Great for prototyping and validating your understanding
 
-    3. **define_training_task(entity_table, entity_id_column, target_definition, prediction_window, slide_step, prediction_horizon, db_connection_string)**
+    3. **define_training_task(entity_table, entity_id_column, target_definition, prediction_window, slide_step, event_table, event_timestamp_column, entity_created_at_column, prediction_horizon, db_connection_string)**
        - Step 1: Define the training task metadata following RDL paper structure
        - Specifies entity table, ID column, and target label definition
+       - **IMPORTANT**: Provide `event_table` and `event_timestamp_column` to generate executable SQL
+       - **RECOMMENDED**: Provide `entity_created_at_column` to enable Active Entity Filtering
+         (prevents future leakage and reduces computation on inactive entities)
        - Returns task_schema [EntityID, SeedTime, TargetLabel] and metadata with date ranges
        - Use after discover_temporal_columns to formalize your task definition
 
-    4. **generate_sql_implementation(task_metadata, dialect, include_create_table, custom_label_sql)**
+    4. **generate_sql_implementation(task_metadata, dialect, include_create_table, custom_label_sql, event_table, event_timestamp_column, entity_created_at_column)**
        - Step 2: Generate executable SQL to create the training table
        - Transforms task definition into actual SQL with sliding window logic
        - Supports dialects: postgresql, mysql, sqlite, bigquery
+       - **Active Entity Filtering**: When `entity_created_at_column` is provided, only includes 
+         entities that existed at each seed_time (avoids CROSS JOIN explosion on large tables)
        - Returns SQL query template that may need refinement for complex label logic
 
     5. **temporal_split(training_table, val_timestamp, test_timestamp, window_size_days)**
@@ -73,6 +78,7 @@ managed_agent:
     - What entities exist? (users, products, transactions, etc.)
     - What events/actions are recorded?
     - What are the foreign key relationships?
+    - **Identify key columns**: entity created_at, event timestamp, etc.
     
     Example queries:
     - `SELECT COUNT(*) FROM table_name`
@@ -88,11 +94,15 @@ managed_agent:
     - `target_definition`: What you're predicting in natural language (e.g., "user makes purchase in next 7 days")
     - `prediction_window`: Label computation window (e.g., '7d')
     - `slide_step`: Seed time sliding step (e.g., '1d')
+    - `event_table`: Table with events for label computation (e.g., 'transactions', 'orders')
+    - `event_timestamp_column`: Timestamp column in event table (e.g., 'created_at')
+    - `entity_created_at_column`: When entity was created (e.g., 'registered_at') - RECOMMENDED
     
     **Step 3b: Generate SQL Implementation**
     Use `generate_sql_implementation` to:
     - Transform task definition into executable SQL
     - Get SQL template for creating training table with sliding window
+    - **Active Entity Filtering** is automatically applied if entity_created_at_column was provided
     - Review and refine the label logic SQL if needed
 
     ### **Step 4: Choose Temporal Split Points**

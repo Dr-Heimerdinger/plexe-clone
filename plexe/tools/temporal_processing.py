@@ -165,6 +165,9 @@ def define_training_task(
     target_definition: str,
     prediction_window: str,
     slide_step: str,
+    event_table: Optional[str] = None,
+    event_timestamp_column: Optional[str] = None,
+    entity_created_at_column: Optional[str] = None,
     prediction_horizon: Optional[str] = None,
     db_connection_string: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -189,6 +192,14 @@ def define_training_task(
                           This defines the time span for label computation from seed time.
         slide_step: The step size for sliding the seed time window (e.g., '1d', '7d')
                    Smaller steps = more training examples but higher correlation.
+        event_table: The table containing events/transactions for label computation
+                    (e.g., 'transactions', 'orders', 'events'). Required for generating executable SQL.
+        event_timestamp_column: The timestamp column in the event table (e.g., 'created_at', 'event_time').
+                               Required for temporal filtering in label computation.
+        entity_created_at_column: Optional. The column indicating when the entity was created 
+                                 (e.g., 'created_at', 'registered_at'). Used to filter out entities 
+                                 that don't exist yet at each seed_time, preventing future leakage 
+                                 and reducing computational waste from inactive entities.
         prediction_horizon: Optional. How far into the future to predict (e.g., '1d', '7d').
                            If not provided, defaults to same as prediction_window.
                            Used to ensure proper temporal gap to prevent leakage.
@@ -266,6 +277,9 @@ def define_training_task(
         "slide_step_days": slide_step_days,
         "prediction_horizon": prediction_horizon or prediction_window,
         "prediction_horizon_days": horizon_days,
+        "event_table": event_table,
+        "event_timestamp_column": event_timestamp_column,
+        "entity_created_at_column": entity_created_at_column,
         "available_date_range": {
             "min": min_date,
             "max": max_date
@@ -302,6 +316,26 @@ def define_training_task(
             f"This may result in gaps between training examples."
         )
     
+    # Warn if event_table or event_timestamp_column not provided
+    if not event_table:
+        warnings.append(
+            "event_table not specified. You will need to provide it in generate_sql_implementation "
+            "or replace the placeholder in the generated SQL."
+        )
+    if not event_timestamp_column:
+        warnings.append(
+            "event_timestamp_column not specified. You will need to provide it in generate_sql_implementation "
+            "or replace the placeholder in the generated SQL."
+        )
+    
+    # Recommend entity_created_at_column for efficiency
+    if not entity_created_at_column:
+        recommendations.append(
+            "Consider providing entity_created_at_column (e.g., 'created_at', 'registered_at') "
+            "to filter entities that exist at each seed_time. This prevents future leakage "
+            "and significantly reduces computation on large entity tables."
+        )
+    
     result = {
         "status": "Task defined successfully",
         "task_schema": ["EntityID", "SeedTime", "TargetLabel"],
@@ -336,7 +370,10 @@ def generate_sql_implementation(
     task_metadata: Dict[str, Any],
     dialect: str = "postgresql",
     include_create_table: bool = False,
-    custom_label_sql: Optional[str] = None
+    custom_label_sql: Optional[str] = None,
+    event_table: Optional[str] = None,
+    event_timestamp_column: Optional[str] = None,
+    entity_created_at_column: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Step 2: Generate executable SQL to create the training table based on task metadata.
@@ -344,12 +381,14 @@ def generate_sql_implementation(
     This tool transforms the task definition from define_training_task into actual SQL statements.
     It generates SQL for:
     1. Creating seed times with sliding window
-    2. Computing target labels based on the target_definition
-    3. Joining entity features with temporal constraints
+    2. Filtering active entities at each seed time (if entity_created_at_column provided)
+    3. Computing target labels based on the target_definition
+    4. Joining with event table for label computation
     
     The generated SQL follows RDL paper principles:
     - Labels are computed from [SeedTime, SeedTime + prediction_window]
     - Features should only use data from (-∞, SeedTime] to prevent leakage
+    - Only entities that exist at seed_time are included (active entity filtering)
 
     Args:
         task_metadata: The metadata dictionary from define_training_task (or the full result dict)
@@ -357,12 +396,17 @@ def generate_sql_implementation(
         include_create_table: If True, wraps the query in CREATE TABLE statement. Default: False
         custom_label_sql: Optional custom SQL expression for label computation. If not provided,
                          a template will be generated based on target_definition that needs LLM refinement.
+        event_table: Override event table name. If not provided, uses value from task_metadata.
+        event_timestamp_column: Override event timestamp column. If not provided, uses value from task_metadata.
+        entity_created_at_column: Override entity created_at column. If not provided, uses value from task_metadata.
+                                 When provided, filters entities to only include those created before seed_time,
+                                 preventing future leakage and reducing computation on inactive entities.
 
     Returns:
         A dictionary containing:
         - sql_query: The generated SQL query (may need LLM refinement for complex label logic)
         - sql_create_table: CREATE TABLE version if include_create_table=True
-        - parameters: Placeholders that need to be filled
+        - parameters: Placeholders that need to be filled (if any)
         - notes: Important notes about the generated SQL
         - requires_refinement: Boolean indicating if LLM should refine the label logic
     """
@@ -384,6 +428,11 @@ def generate_sql_implementation(
     date_range = meta.get("available_date_range", {})
     min_date = date_range.get("min")
     max_date = date_range.get("max")
+    
+    # Get event table info - prioritize function params, then metadata
+    evt_table = event_table or meta.get("event_table")
+    evt_timestamp_col = event_timestamp_column or meta.get("event_timestamp_column")
+    entity_created_col = entity_created_at_column or meta.get("entity_created_at_column")
     
     # Dialect-specific syntax
     dialect_config = {
@@ -464,10 +513,28 @@ WITH RECURSIVE seed_times AS (
     WHERE seed_time < CAST('{max_date}' AS {config['timestamp_type']}) - {config['interval'](prediction_window_days)}
 )"""
     
-    # Main query structure
-    main_query = f"""
-{seed_time_sql},
-
+    # Generate entity-seed pair logic based on whether we have entity_created_at_column
+    # This addresses the "Active Entity Problem" - avoiding CROSS JOIN with all entities
+    if entity_created_col:
+        # OPTIMIZED: Only include entities that existed at the seed_time
+        # This prevents future leakage and reduces computation significantly
+        entity_seed_pairs_sql = f"""
+-- Create pairs of (entity, seed_time) ONLY for entities that existed at that time
+-- This prevents future leakage and reduces computation (Active Entity Filtering)
+entity_seed_pairs AS (
+    SELECT 
+        e.{entity_id_column} AS entity_id,
+        s.seed_time
+    FROM {entity_table} e
+    JOIN seed_times s ON e.{entity_created_col} <= s.seed_time
+)"""
+        notes.append(
+            f"Active Entity Filtering enabled: Only entities with {entity_created_col} <= seed_time are included. "
+            f"This prevents future leakage and reduces computation on inactive/future entities."
+        )
+    else:
+        # FALLBACK: Cross join (less efficient, may include future entities)
+        entity_seed_pairs_sql = f"""
 -- Get all entities from the entity table
 entities AS (
     SELECT DISTINCT {entity_id_column} AS entity_id
@@ -475,13 +542,51 @@ entities AS (
 ),
 
 -- Cross join to create all (entity, seed_time) combinations
+-- WARNING: This may include entities that don't exist at the seed_time (future leakage risk)
+-- Consider providing entity_created_at_column to filter active entities
 entity_seed_pairs AS (
     SELECT 
         e.entity_id,
         s.seed_time
     FROM entities e
     CROSS JOIN seed_times s
-),
+)"""
+        notes.append(
+            "WARNING: Using CROSS JOIN for entity-seed pairs. This may include entities that don't exist "
+            "at the seed_time (future leakage) and cause unnecessary computation on inactive entities. "
+            "Provide entity_created_at_column to enable Active Entity Filtering."
+        )
+    
+    # Determine event table reference in SQL
+    if evt_table and evt_timestamp_col:
+        # Fully specified - generate executable SQL
+        event_join_sql = f"""
+    LEFT JOIN {evt_table} evt ON 
+        evt.{entity_id_column} = esp.entity_id
+        AND evt.{evt_timestamp_col} >= esp.seed_time
+        AND evt.{evt_timestamp_col} < esp.seed_time + {config['interval'](prediction_window_days)}"""
+        notes.append(f"Event table: {evt_table}, timestamp column: {evt_timestamp_col}")
+    else:
+        # Need placeholders
+        evt_table_ref = evt_table or "{{EVENT_TABLE}}"
+        evt_ts_ref = evt_timestamp_col or "{{TIMESTAMP_COLUMN}}"
+        event_join_sql = f"""
+    -- TODO: Verify the event table and timestamp column names
+    LEFT JOIN {evt_table_ref} evt ON 
+        evt.{entity_id_column} = esp.entity_id
+        AND evt.{evt_ts_ref} >= esp.seed_time
+        AND evt.{evt_ts_ref} < esp.seed_time + {config['interval'](prediction_window_days)}"""
+        
+        if not evt_table:
+            parameters["EVENT_TABLE"] = "The table containing events/transactions for label computation"
+        if not evt_timestamp_col:
+            parameters["TIMESTAMP_COLUMN"] = "The timestamp column in the event table"
+    
+    # Main query structure
+    main_query = f"""
+{seed_time_sql},
+
+{entity_seed_pairs_sql},
 
 -- Compute labels for each (entity, seed_time) pair
 -- Label window: [seed_time, seed_time + {prediction_window}]
@@ -490,13 +595,7 @@ training_labels AS (
         esp.entity_id AS "EntityID",
         esp.seed_time AS "SeedTime",
         {label_sql} AS "TargetLabel"
-    FROM entity_seed_pairs esp
-    -- LEFT JOIN with event/transaction table to compute labels
-    -- TODO: Add appropriate JOIN based on your schema
-    LEFT JOIN {{EVENT_TABLE}} evt ON 
-        evt.{entity_id_column} = esp.entity_id
-        AND evt.{{TIMESTAMP_COLUMN}} >= esp.seed_time
-        AND evt.{{TIMESTAMP_COLUMN}} < esp.seed_time + {config['interval'](prediction_window_days)}
+    FROM entity_seed_pairs esp{event_join_sql}
     GROUP BY esp.entity_id, esp.seed_time
 )
 
@@ -507,12 +606,6 @@ SELECT
 FROM training_labels
 ORDER BY "SeedTime", "EntityID"
 """
-    
-    # Add parameters that need to be filled
-    parameters.update({
-        "EVENT_TABLE": "The table containing events/transactions for label computation",
-        "TIMESTAMP_COLUMN": "The timestamp column in the event table"
-    })
     
     # Generate CREATE TABLE version if requested
     sql_create_table = None
@@ -531,30 +624,37 @@ CREATE INDEX idx_training_entity ON training_table ("EntityID");
         f"Prediction window: {prediction_window} ({prediction_window_days} days)",
         f"Slide step: {slide_step} ({slide_step_days} days)",
         f"SQL dialect: {dialect}",
-        "Replace {{EVENT_TABLE}} and {{TIMESTAMP_COLUMN}} with actual table/column names.",
-        "Ensure proper temporal filtering to prevent data leakage in feature computation."
     ])
+    
+    # Only add placeholder notes if there are still placeholders
+    if parameters:
+        notes.append("Replace placeholders ({{...}}) with actual table/column names.")
+    notes.append("Ensure proper temporal filtering to prevent data leakage in feature computation.")
     
     result = {
         "status": "SQL generated",
         "sql_query": main_query.strip(),
         "sql_create_table": sql_create_table.strip() if sql_create_table else None,
-        "parameters": parameters,
+        "parameters": parameters if parameters else None,
         "notes": notes,
         "requires_refinement": requires_refinement,
         "dialect": dialect,
         "metadata_used": {
             "entity_table": entity_table,
             "entity_id_column": entity_id_column,
+            "event_table": evt_table,
+            "event_timestamp_column": evt_timestamp_col,
+            "entity_created_at_column": entity_created_col,
             "prediction_window_days": prediction_window_days,
-            "slide_step_days": slide_step_days
+            "slide_step_days": slide_step_days,
+            "active_entity_filtering": entity_created_col is not None
         }
     }
     
     # Store the generated SQL for reference
     object_registry.register(dict, "training_table_sql", result, overwrite=True)
     
-    logger.info(f"SQL implementation generated for dialect={dialect}, requires_refinement={requires_refinement}")
+    logger.info(f"SQL implementation generated for dialect={dialect}, requires_refinement={requires_refinement}, active_entity_filtering={entity_created_col is not None}")
     
     return result
 
