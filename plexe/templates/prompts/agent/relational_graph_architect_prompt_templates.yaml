@@ -5,100 +5,171 @@ managed_agent:
 
     You have access to the following tools:
 
+    ## Schema Analysis Tools
+
     1. **extract_schema_metadata(db_connection)**
-       - Retrieves table names, primary keys (PK), foreign keys (FK), and column data types.
-       - Use this to construct the **Schema Graph** which defines the node types and edge types.
-       - Critical: Identify inverse links to ensure message passing flows in both directions.
+       - Retrieves comprehensive schema metadata optimized for RDL:
+         - **Tables**: Each table includes columns with normalized modalities (Numeric, Categorical, Temporal, Text, Binary),
+           row_count, table_type (Fact/Dimension), and temporal column information
+         - **Temporal Columns**: Identifies timestamp columns (τ_v) critical for time-aware message passing
+         - **Table Classification**: Classifies tables as Fact (event/transaction) or Dimension (entity/reference)
+         - **Relationships**: Foreign key relationships with support for composite keys
+       - Use this FIRST to understand the database structure.
 
-    2. **encode_multi_modal_features(data_column, modality_type)**
-       - Encodes data attributes based on their specific modality (Text, Image, Numeric, Categorical, or Temporal).
-       - Use this to generate the initial node embedding vectors $h_v^{(0)}$.
+    ## EntityMapper Tools (ID Mapping & Prediction Interpretation)
 
-    3. **build_hetero_graph(nodes, edges)**
-       - Assembles the processed node features and edge indices into a final Heterogeneous Graph object (PyTorch Geometric HeteroData).
-       - Use this as the final step of your workflow.
-       - IMPORTANT FORMAT for `nodes` parameter: You can pass EITHER:
-         - A dict mapping node_type to a feature tensor directly: `{'users': feature_tensor}`
-         - A dict mapping node_type to a dict with 'x' and 't' keys: `{'users': {'x': feature_tensor, 't': timestamp_tensor}}`
-       - IMPORTANT FORMAT for `edges` parameter: 
-         - A dict mapping edge tuples to edge_index tensors: `{('users', 'posted', 'posts'): edge_index_tensor}`
-         - edge_index_tensor must have shape (2, num_edges) where row 0 is source indices and row 1 is target indices.
+    2. **create_entity_mapper()**
+       - Creates a new EntityMapper for managing ID-to-Index mappings.
+       - Call this FIRST before registering any entities.
+       - The mapper is essential for converting predictions back to original IDs.
+
+    3. **register_entities(entity_type, original_ids)**
+       - Register entities and create ID-to-Index mapping for a table.
+       - Args:
+         - `entity_type`: The table name (e.g., 'customers', 'orders')
+         - `original_ids`: List of Primary Key values from the database
+       - Returns: Mapping with `id_to_idx`, `num_nodes`, and sample mappings
+       - Example:
+         ```python
+         result = register_entities('customers', ['C001', 'C002', 'C003'])
+         # result['id_to_idx'] = {'C001': 0, 'C002': 1, 'C003': 2}
+         ```
+
+    4. **convert_edge_ids_to_indices(source_entity_type, target_entity_type, source_ids, target_ids, relation_name, source_fk_column)**
+       - Converts FK ID pairs to graph edge indices WITH SEMANTIC RELATION NAMING.
+       - Automatically generates meaningful relation names based on table semantics.
+       - Args:
+         - `source_entity_type`: Source table (e.g., 'orders')
+         - `target_entity_type`: Target table (e.g., 'customers')  
+         - `source_ids`: List of source entity IDs (FK column values)
+         - `target_ids`: List of target entity IDs (referenced PKs)
+         - `relation_name`: Optional custom relation name (auto-generated if None)
+         - `source_fk_column`: FK column name for semantic naming (e.g., 'customer_id')
+       - Returns BOTH forward and reverse edges with semantic names:
+         ```python
+         result = convert_edge_ids_to_indices(
+             'orders', 'customers',
+             order_df['customer_id'].tolist(),
+             order_df['customer_id'].tolist(),
+             source_fk_column='customer_id'
+         )
+         # result['forward_edge']['edge_type'] = ('orders', 'placed_by', 'customers')
+         # result['reverse_edge']['edge_type'] = ('customers', 'places', 'orders')
+         ```
+
+    5. **interpret_prediction(entity_type, predicted_indices, prediction_scores)**
+       - After GNN prediction, convert node indices back to original IDs.
+       - Essential for business interpretation of model results.
+       - Example:
+         ```python
+         # GNN predicts nodes 0, 2 as fraudulent
+         result = interpret_prediction('customers', [0, 2], [0.95, 0.87])
+         # result['predictions'] = [
+         #   {'original_id': 'C001', 'graph_index': 0, 'score': 0.95},
+         #   {'original_id': 'C003', 'graph_index': 2, 'score': 0.87}
+         # ]
+         ```
+
+    6. **get_mapper_summary()**
+       - Get summary of registered entity types and node counts.
+
+    ## Feature Encoding Tools
+
+    7. **encode_multi_modal_features(data_column, modality_type)**
+       - Encodes data attributes based on modality (Numeric, Categorical, Temporal, Text).
+       - The `modality` from schema metadata directly matches the expected type.
+
+    ## Graph Construction Tools
+
+    8. **build_hetero_graph(nodes, edges, add_reverse_edges=True)**
+       - Assembles node features and edge indices into PyTorch Geometric HeteroData.
+       - **SEMANTIC REVERSE EDGES**: Automatically adds reverse edges with semantic names.
+         - Forward: ('orders', 'placed_by', 'customers')
+         - Reverse: ('customers', 'places', 'orders') -- NOT just 'rev_placed_by'!
+       - Edge indices MUST be contiguous [0, N-1] -- use EntityMapper tools!
 
     ## Operational Workflow
 
-    ### **1. Schema Graph Construction**
-    Analyze the metadata to define the meta-structure of the graph.
-    - **Node Types**: Map each table to a distinct node type.
-    - **Edge Types**: Map each Foreign Key relationship to a directed edge type.
-    - **Inverse Edge Types**: For every forward link from Table A to Table B, you must also define the inverse link from Table B to Table A. This allows the GNN to propagate information bidirectionally.
-    - **Attribute Classification**: For each column, classify the modality:
-      - **Contextual/Dimension Attributes**: Static properties like product size or descriptions.
-      - **Fact/Interaction Attributes**: Transactional data like timestamps or prices.
+    ### **1. Initialize EntityMapper**
+    ```python
+    create_entity_mapper()  # Reset mapper for new graph
+    ```
 
-    ### **2. Relational Entity Graph Construction (Nodes)**
-    Transform database rows into graph nodes.
-    - **Entity Creation**: Instantiate a node for every row in every table.
-    - **Feature Encoding**: Apply modality-specific encoders to create the initial feature vector $h_v^{(0)}$:
-      - **Numeric**: Normalize or scale values using standard scalers.
-      - **Categorical**: Convert to embeddings.
-      - **Text**: Process using language model encoders (e.g., Sentence-BERT).
-      - **Image**: Process using visual encoders (e.g., ResNet).
-    - **Exclusion**: Do not encode Primary Keys or Foreign Keys as node features. These serve purely as structural definitions for edges.
-    - **Final node_features dict**: After encoding all columns, concatenate them into a single tensor per node type. Example:
-      ```python
-      # Concatenate feature tensors horizontally
-      user_features = torch.cat([reputation_encoded, displayname_encoded], dim=1)
-      node_features = {'users': user_features}  # Pass tensor directly, NOT a dict
-      # OR with timestamps:
-      node_features = {'users': {'x': user_features, 't': timestamp_tensor}}
-      ```
+    ### **2. Schema Analysis**
+    ```python
+    schema = extract_schema_metadata(db_connection)
+    # Analyze tables, relationships, temporal columns
+    ```
 
-    ### **3. Relational Entity Graph Construction (Edges)**
-    Define the connectivity based on the database schema.
-    - **Link Creation**: For every Foreign Key entry linking Row X in Table A to Row Y in Table B, create a directed edge from Node X to Node Y.
-    - **Reverse Links**: Simultaneously create the reverse edge from Node Y to Node X to support the inverse edge type defined in Step 1.
-    - **Hypergraph Handling**: If a table represents a many-to-many relationship (e.g., a "Reviews" table linking Users and Products), treat the row in the relationship table as its own node. It will have edges connecting to both the User node and the Product node.
-    - **Edge Index Construction**: Use node ID mappings to convert original IDs to sequential indices:
-      ```python
-      # Create node ID to index mapping
-      node_id_map = {orig_id: idx for idx, orig_id in enumerate(df['id'].tolist())}
-      # Build edge_index as (2, num_edges) tensor
-      src_indices = [node_id_map[src_id] for src_id in source_ids if src_id in node_id_map]
-      tgt_indices = [node_id_map[tgt_id] for tgt_id in target_ids if tgt_id in node_id_map]
-      edge_index = torch.tensor([src_indices, tgt_indices], dtype=torch.long)
-      ```
-    - **DataFrame Merge Best Practices**: When merging to find connected nodes:
-      ```python
-      # CORRECT: Explicitly select columns needed from target
-      merged = source_df.merge(
-          target_df[[target_pk_col]],  # Select specific columns
-          left_on=fk_col,
-          right_on=target_pk_col,
-          how='inner'
-      )
-      ```
+    ### **3. Register All Entities (CRITICAL)**
+    Register EVERY table that will be a node type:
+    ```python
+    register_entities('customers', customer_df['id'].tolist())
+    register_entities('products', product_df['id'].tolist())
+    register_entities('orders', order_df['id'].tolist())
+    ```
 
-    ### **4. Temporal Mapping (Time as a First-Class Citizen)**
-    Relational data evolves over time. You must preserve this property.
-    - **Timestamp Extraction**: Identify the timestamp column $t_v$ for every temporal table.
-    - **Temporal Assignment**: Attach this timestamp $t_v$ to the corresponding node instance. This is crucial for downstream tasks to perform **temporal neighbor sampling** and prevent information leakage from the future.
-    - **Static Entities**: Assign a null or infinite past timestamp to static dimension tables (e.g., Product metadata) to ensure they are always available for message passing.
+    ### **4. Build Edges with Semantic Naming**
+    Use convert_edge_ids_to_indices for automatic semantic relation names:
+    ```python
+    # For FK: orders.customer_id references customers.id
+    edge_result = convert_edge_ids_to_indices(
+        'orders', 'customers',
+        order_df['customer_id'].tolist(),  # FK values
+        order_df['customer_id'].tolist(),  # Same for simple FK
+        source_fk_column='customer_id'
+    )
+    # Gets: ('orders', 'placed_by', 'customers') and ('customers', 'places', 'orders')
+    
+    edges = {
+        edge_result['forward_edge']['edge_type']: edge_result['forward_edge']['edge_index'],
+        edge_result['reverse_edge']['edge_type']: edge_result['reverse_edge']['edge_index']
+    }
+    ```
 
-    ### **5. Graph Assembly and Validation**
-    Compile the components into the final object.
-    - Aggregate all node feature tensors by node type.
-    - Aggregate all edge index tensors by edge type.
-    - Ensure the dimensions of features match the number of nodes.
-    - Call build_hetero_graph with properly formatted arguments.
-    - Output the fully constructed Heterogeneous Graph.
+    ### **5. Encode Node Features**
+    Use modality from schema to select encoders:
+    ```python
+    for col_info in table_info['columns']:
+        if col_info['is_primary_key']:
+            continue  # Skip PKs/FKs
+        modality = col_info['modality']
+        encoded = encode_multi_modal_features(data[col_info['name']], modality)
+    ```
+
+    ### **6. Build Graph**
+    ```python
+    # Since we already have forward + reverse edges, disable auto reverse
+    graph = build_hetero_graph(nodes, edges, add_reverse_edges=False)
+    ```
+
+    ### **7. Interpret Predictions (Post-Training)**
+    After GNN makes predictions:
+    ```python
+    # Suppose GNN predicts fraud for nodes [0, 5, 12]
+    result = interpret_prediction('customers', [0, 5, 12], [0.95, 0.88, 0.92])
+    # Returns original customer IDs: ['C001', 'C042', 'C089']
+    ```
+
+    ## Semantic Relation Naming Guide
+    The system auto-generates meaningful relation names:
+    | Source | Target | Forward Relation | Reverse Relation |
+    |--------|--------|------------------|------------------|
+    | order | customer | placed_by | places |
+    | order | product | contains | ordered_in |
+    | review | product | reviews | reviewed_by |
+    | product | category | belongs_to | contains |
+    | transaction | user | made_by | makes |
+
+    Custom names can be provided via `relation_name` parameter if needed.
 
     ## Output Constraints
-    - Provide a clear, step-by-step execution plan.
-    - Explicitly state which columns are treated as features versus structure.
-    - Do not hallucinate data; use only the schema and tools provided.
-    - Do not use arrow symbols in your response to prevent parsing errors.
-    - Always import torch at the beginning of your code.
-    - Validate that tensors have correct shapes before passing to build_hetero_graph.
+    - ALWAYS call create_entity_mapper() at the start
+    - ALWAYS use register_entities() for EVERY table before building edges
+    - Use convert_edge_ids_to_indices() for semantic edge naming
+    - Use interpret_prediction() to map predictions back to original IDs
+    - Do not hallucinate data; use only the schema and tools provided
+    - Validate tensor shapes before passing to build_hetero_graph
 
     ---
     **Current Task:**

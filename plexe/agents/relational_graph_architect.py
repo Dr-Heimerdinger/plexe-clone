@@ -13,6 +13,15 @@ from plexe.tools.graph_processing import (
     extract_schema_metadata,
     build_hetero_graph,
     encode_multi_modal_features,
+    # EntityMapper tools
+    create_entity_mapper,
+    register_entities,
+    get_entity_index,
+    convert_edge_ids_to_indices,
+    interpret_prediction,
+    get_mapper_summary,
+    # Deprecated but kept for compatibility
+    create_id_mapping,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,7 +57,15 @@ class RelationalGraphArchitectAgent:
             ),
             model=LiteLLMModel(model_id=self.model_id),
             tools=[
+                # Schema analysis
                 extract_schema_metadata,
+                # EntityMapper tools (for ID mapping and prediction interpretation)
+                create_entity_mapper,
+                register_entities,
+                convert_edge_ids_to_indices,
+                interpret_prediction,
+                get_mapper_summary,
+                # Graph construction
                 build_hetero_graph,
                 encode_multi_modal_features,
             ],
