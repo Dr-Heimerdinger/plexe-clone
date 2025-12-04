@@ -38,7 +38,7 @@ def test_model_with_ray(sample_dataset):
     # Set a short timeout for testing
     model.build(
         datasets=[sample_dataset],
-        provider="openai/gpt-oss-20b",
+        provider="gemini/gemini-2.5-flash",
         timeout=300,  # 5 minutes max
         run_timeout=60,  # 1 minute per run
     )

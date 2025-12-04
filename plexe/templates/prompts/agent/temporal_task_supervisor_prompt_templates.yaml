@@ -27,17 +27,29 @@ managed_agent:
        - Defines the training table schema and discovers date ranges
        - Use after discover_temporal_columns to formalize your task definition
 
-    4. **temporal_split(training_table, val_timestamp, test_timestamp)**
+    4. **temporal_split(training_table, val_timestamp, test_timestamp, window_size_days)**
        - Validates and records your temporal split configuration
        - Checks that your dates are within the actual data range
+       - **CRITICAL**: Set window_size_days to your prediction horizon (e.g., 2 for "predict in next 2 days")
+       - Validates that val_timestamp + window_size_days <= test_timestamp to prevent DATA LEAKAGE
+       - Returns warnings if validation labels would overlap with test input data
 
-    5. **create_temporal_dataset(db_connection_string, entity_table, entity_id_column, timestamp_column, label_query, feature_query, train_end_date, val_end_date, ...)**
-       - Creates actual train/val/test datasets using YOUR custom SQL queries
-       - This is the most flexible tool - you define exactly how to extract labels and features
+    5. **create_temporal_dataset(db_connection_string, entity_table, entity_id_column, timestamp_column, label_query, feature_query, train_end_date, val_end_date, test_end_date, window_size_days, num_train_windows, train_stride_days, output_dir)**
+       - Creates train/val/test datasets using RDL Sliding Window Sampling strategy
+       - **CRITICAL**: Implements multiple training snapshots moving backwards in time
+       - Training: Multiple windows (num_train_windows) stepping back by train_stride_days
+       - Validation/Test: Single snapshot at their respective cutoff dates
+       - Example: num_train_windows=12, train_stride_days=30 = 12 monthly snapshots for training
 
     6. **generate_temporal_splits_from_db(db_connection_string, window_days, num_train_windows, ...)**
        - Convenience tool that auto-discovers schema and suggests split points
        - Use when you want a quick overview of temporal structure
+
+    7. **validate_temporal_consistency(graph_obj_name, training_table_name, n_samples, time_attr)**
+       - Performs sampling-based sanity check on Graph + Training Table
+       - Verifies τ(neighbor) <= t: neighbors must not be from the future
+       - Reports "Leakage Risk" percentage requiring temporal filtering
+       - Use AFTER graph construction to confirm temporal sampling is needed
 
     ## Operational Workflow
 
@@ -69,7 +81,10 @@ managed_agent:
     Based on the actual date range discovered:
     - Choose validation cutoff date WITHIN the data range
     - Choose test cutoff date AFTER validation cutoff
+    - **CRITICAL**: Ensure gap between val and test >= prediction window (window_size_days)
+      Example: If predicting "next 2 days", and val_cutoff = 2012-01-10, then test_cutoff >= 2012-01-12
     - Ensure enough data in each split
+    - Call temporal_split with window_size_days to validate NO DATA LEAKAGE
 
     ### **Step 5: Create the Datasets**
     Use `create_temporal_dataset` with custom SQL queries, OR
@@ -79,6 +94,7 @@ managed_agent:
     - **Schema-Agnostic**: Don't assume column names. Discover them first!
     - **Temporal Consistency**: Labels must only use future data relative to features
     - **No Leakage**: Training data must not see validation/test information
+    - **Window Separation**: Gap between splits must be >= prediction window to prevent label leakage
     - **Flexible Queries**: You write the SQL based on the actual schema
 
     ---

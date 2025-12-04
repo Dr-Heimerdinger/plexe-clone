@@ -50,9 +50,8 @@ communication and smart decision-making.
 - **RelationalGNNSpecialist**: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
 
 ## 4. Critical Decision Points
-- **Relational Data**: If the input is a Relational Database (multiple tables with FKs), PREFER the RDL pipeline (Architect to Supervisor to GNN Specialist) over the standard tabular pipeline.
-  **IMPORTANT**: Always pass the database connection string to RDL agents in your task description!
-- **Failed experiments**: Analyze why (data issues? approach mismatch?) before trying alternatives
+- **Relational Data**: If the input is a Relational Database (multiple tables with FKs), PREFER the RDL pipeline (Architect and Supervisor and GNN Specialist) over the standard tabular pipeline.
+- **Failed experiments**: Analyze why (data issues? approach mismatch? syntax errors? dependencies problems?) before trying alternatives
 - **Suspicious metrics**: Zero error often indicates bugs; extremely high variance suggests instability
 - **Resource usage**: Balance model complexity with practical constraints
 - **Early stopping**: Stop if performance plateaus across diverse approaches

@@ -37,7 +37,7 @@ class ModelBuilder:
 
     def __init__(
         self,
-        provider: str | ProviderConfig = "openai/gpt-oss-20b",
+        provider: str | ProviderConfig = "gemini/gemini-2.5-flash",
         verbose: bool = False,
         distributed: bool = False,
         working_dir: Optional[str] = None,
@@ -187,7 +187,7 @@ class ModelBuilder:
                 ml_ops_engineer_model_id=self.provider_config.ops_provider,
                 tool_model_id=self.provider_config.tool_provider,
                 verbose=self.verbose,
-                max_steps=30,
+                max_steps=50,
                 distributed=self.distributed,
                 chain_of_thought_callable=cot_callable,
                 max_solutions=max_iterations,

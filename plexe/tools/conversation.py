@@ -210,7 +210,7 @@ def initiate_model_build(
         # Import here to avoid circular dependencies
         from plexe.model_builder import ModelBuilder
 
-        gemini_model = "openai/gpt-oss-20b"
+        gemini_model = "gemini/gemini-2.5-flash"
 
         model_builder = ModelBuilder(
             provider=ProviderConfig(
