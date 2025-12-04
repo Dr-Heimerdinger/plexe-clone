@@ -11,7 +11,10 @@ from plexe.config import config
 from plexe.internal.common.utils.agents import get_prompt_templates
 from plexe.tools.graph_processing import (
     extract_schema_metadata,
+    load_table_data,
+    get_cached_schema,
     build_hetero_graph,
+    get_graph_from_registry,
     encode_multi_modal_features,
     # EntityMapper tools
     create_entity_mapper,
@@ -57,8 +60,10 @@ class RelationalGraphArchitectAgent:
             ),
             model=LiteLLMModel(model_id=self.model_id),
             tools=[
-                # Schema analysis
+                # Schema analysis & data loading
                 extract_schema_metadata,
+                get_cached_schema,
+                load_table_data,
                 # EntityMapper tools (for ID mapping and prediction interpretation)
                 create_entity_mapper,
                 register_entities,
@@ -67,6 +72,7 @@ class RelationalGraphArchitectAgent:
                 get_mapper_summary,
                 # Graph construction
                 build_hetero_graph,
+                get_graph_from_registry,
                 encode_multi_modal_features,
             ],
             prompt_templates=get_prompt_templates(

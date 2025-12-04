@@ -20,20 +20,129 @@ from plexe.internal.common.datasets.interface import TabularConvertible
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Unified Schema Cache Key - Shared with graph_processing.py
+# =============================================================================
+# Both TemporalSupervisor and GraphArchitect need schema information.
+# We use a unified cache key to avoid redundant DB queries.
+
+UNIFIED_SCHEMA_CACHE_KEY = "unified_db_schema"
+
+
+def _get_cached_temporal_info(db_connection: str) -> Optional[Dict[str, Any]]:
+    """
+    Check if temporal info is already cached in ObjectRegistry.
+    Returns cached temporal info if connection string matches, None otherwise.
+    """
+    try:
+        object_registry = ObjectRegistry()
+        cached = object_registry.get(dict, UNIFIED_SCHEMA_CACHE_KEY)
+        
+        # Verify connection string matches
+        if cached.get("_connection_string") == db_connection:
+            # Extract temporal info from unified schema
+            if "tables" in cached:
+                logger.info("Extracting temporal info from cached unified schema")
+                temporal_info = {"tables": {}, "overall_range": cached.get("temporal_summary", {}).get("overall_date_range", {"min": None, "max": None})}
+                
+                for table_name, table_data in cached.get("tables", {}).items():
+                    temporal_ranges = table_data.get("temporal_ranges")
+                    if temporal_ranges:
+                        temporal_columns = []
+                        for col_name, ranges in temporal_ranges.items():
+                            temporal_columns.append({
+                                "column": col_name,
+                                "type": "TIMESTAMP",  # Approximate
+                                "min_date": ranges.get("min"),
+                                "max_date": ranges.get("max")
+                            })
+                        if temporal_columns:
+                            temporal_info["tables"][table_name] = temporal_columns
+                
+                return temporal_info
+    except KeyError:
+        pass
+    
+    # Also check for dedicated temporal_schema_info
+    try:
+        object_registry = ObjectRegistry()
+        temporal_info = object_registry.get(dict, "temporal_schema_info")
+        if temporal_info:
+            return temporal_info
+    except KeyError:
+        pass
+        
+    return None
+
+
+def _cache_temporal_to_unified(db_connection: str, temporal_info: Dict[str, Any]) -> None:
+    """Cache temporal info and update unified schema if it exists."""
+    object_registry = ObjectRegistry()
+    
+    # Register dedicated temporal info
+    object_registry.register(dict, "temporal_schema_info", temporal_info, overwrite=True)
+    object_registry.register(str, "db_connection_string", db_connection, overwrite=True)
+    
+    # If unified schema exists, update it with temporal info
+    try:
+        cached = object_registry.get(dict, UNIFIED_SCHEMA_CACHE_KEY)
+        if cached.get("_connection_string") == db_connection:
+            # Update temporal summary in unified schema
+            cached["temporal_summary"] = {
+                "tables_with_timestamps": list(temporal_info.get("tables", {}).keys()),
+                "overall_date_range": temporal_info.get("overall_range", {"min": None, "max": None})
+            }
+            object_registry.register(dict, UNIFIED_SCHEMA_CACHE_KEY, cached, overwrite=True)
+            logger.info("Updated unified schema with temporal info")
+    except KeyError:
+        # No unified schema yet - create a minimal one for temporal info
+        unified = {
+            "_connection_string": db_connection,
+            "temporal_summary": {
+                "tables_with_timestamps": list(temporal_info.get("tables", {}).keys()),
+                "overall_date_range": temporal_info.get("overall_range", {"min": None, "max": None})
+            },
+            "tables": {},  # Will be filled by extract_schema_metadata later
+            "relationships": []
+        }
+        # Add basic temporal column info to tables
+        for table_name, columns in temporal_info.get("tables", {}).items():
+            unified["tables"][table_name] = {
+                "temporal_columns": [c["column"] for c in columns],
+                "temporal_ranges": {
+                    c["column"]: {"min": c.get("min_date"), "max": c.get("max_date")}
+                    for c in columns
+                }
+            }
+        object_registry.register(dict, UNIFIED_SCHEMA_CACHE_KEY, unified, overwrite=True)
+        logger.info("Created unified schema cache with temporal info")
+
+
 @tool
-def discover_temporal_columns(db_connection_string: str) -> Dict[str, Any]:
+def discover_temporal_columns(db_connection_string: str, force_refresh: bool = False) -> Dict[str, Any]:
     """
     Discovers all timestamp/date columns across all tables in the database.
     Use this to understand the temporal structure of the data before creating temporal splits.
     
+    **IMPORTANT**: This tool uses a unified schema cache shared with GraphArchitect's
+    `extract_schema_metadata`. If schema has already been analyzed, cached info is returned.
+    
     Args:
         db_connection_string: SQLAlchemy connection string (e.g., 'postgresql+psycopg2://user:pass@host:port/db')
+        force_refresh: If True, bypass cache and re-query database. Default False.
     
     Returns:
         A dictionary containing:
         - tables: Dict mapping table names to lists of temporal columns with their date ranges
         - overall_range: The min and max dates across all temporal columns
     """
+    # Check cache first
+    if not force_refresh:
+        cached = _get_cached_temporal_info(db_connection_string)
+        if cached and cached.get("tables"):
+            logger.info("Returning cached temporal schema info")
+            return cached
+    
     try:
         engine = create_engine(db_connection_string)
         inspector = inspect(engine)
@@ -85,15 +194,8 @@ def discover_temporal_columns(db_connection_string: str) -> Dict[str, Any]:
                 "max": str(max(all_max_dates))
             }
         
-        # Register in ObjectRegistry for other tools to use
-        object_registry = ObjectRegistry()
-        object_registry.register(dict, "temporal_schema_info", temporal_info, overwrite=True)
-        
-        # Also register the connection string
-        try:
-            object_registry.register(str, "db_connection_string", db_connection_string, overwrite=True)
-        except Exception:
-            pass  # Already registered as immutable
+        # Cache in unified schema registry
+        _cache_temporal_to_unified(db_connection_string, temporal_info)
         
         return temporal_info
         

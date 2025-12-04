@@ -7,23 +7,38 @@ managed_agent:
 
     ## Schema Analysis Tools
 
-    1. **extract_schema_metadata(db_connection)**
+    1. **get_cached_schema()**
+       - **USE THIS FIRST** to check if schema has already been analyzed by TemporalSupervisor.
+       - Returns cached schema from ObjectRegistry if available.
+       - Saves time by avoiding redundant database queries.
+       - Example:
+         ```python
+         cached = get_cached_schema()
+         if cached['found']:
+             schema = cached['schema']
+             print(f"Using cached schema from {cached['source']}")
+         else:
+             schema = extract_schema_metadata(db_connection)
+         ```
+
+    2. **extract_schema_metadata(db_connection, force_refresh=False)**
        - Retrieves comprehensive schema metadata optimized for RDL:
          - **Tables**: Each table includes columns with normalized modalities (Numeric, Categorical, Temporal, Text, Binary),
            row_count, table_type (Fact/Dimension), and temporal column information
          - **Temporal Columns**: Identifies timestamp columns (τ_v) critical for time-aware message passing
          - **Table Classification**: Classifies tables as Fact (event/transaction) or Dimension (entity/reference)
          - **Relationships**: Foreign key relationships with support for composite keys
-       - Use this FIRST to understand the database structure.
+       - Uses cache automatically - only queries DB if cache miss.
+       - Set `force_refresh=True` to bypass cache.
 
     ## EntityMapper Tools (ID Mapping & Prediction Interpretation)
 
-    2. **create_entity_mapper()**
+    3. **create_entity_mapper()**
        - Creates a new EntityMapper for managing ID-to-Index mappings.
        - Call this FIRST before registering any entities.
        - The mapper is essential for converting predictions back to original IDs.
 
-    3. **register_entities(entity_type, original_ids)**
+    4. **register_entities(entity_type, original_ids)**
        - Register entities and create ID-to-Index mapping for a table.
        - Args:
          - `entity_type`: The table name (e.g., 'customers', 'orders')
@@ -35,7 +50,7 @@ managed_agent:
          # result['id_to_idx'] = {'C001': 0, 'C002': 1, 'C003': 2}
          ```
 
-    4. **convert_edge_ids_to_indices(source_entity_type, target_entity_type, source_ids, target_ids, relation_name, source_fk_column)**
+    5. **convert_edge_ids_to_indices(source_entity_type, target_entity_type, source_ids, target_ids, relation_name, source_fk_column)**
        - Converts FK ID pairs to graph edge indices WITH SEMANTIC RELATION NAMING.
        - Automatically generates meaningful relation names based on table semantics.
        - Args:
@@ -57,7 +72,7 @@ managed_agent:
          # result['reverse_edge']['edge_type'] = ('customers', 'places', 'orders')
          ```
 
-    5. **interpret_prediction(entity_type, predicted_indices, prediction_scores)**
+    6. **interpret_prediction(entity_type, predicted_indices, prediction_scores)**
        - After GNN prediction, convert node indices back to original IDs.
        - Essential for business interpretation of model results.
        - Example:
@@ -70,18 +85,18 @@ managed_agent:
          # ]
          ```
 
-    6. **get_mapper_summary()**
+    7. **get_mapper_summary()**
        - Get summary of registered entity types and node counts.
 
     ## Feature Encoding Tools
 
-    7. **encode_multi_modal_features(data_column, modality_type)**
+    8. **encode_multi_modal_features(data_column, modality_type)**
        - Encodes data attributes based on modality (Numeric, Categorical, Temporal, Text).
        - The `modality` from schema metadata directly matches the expected type.
 
     ## Graph Construction Tools
 
-    8. **build_hetero_graph(nodes, edges, add_reverse_edges=True)**
+    9. **build_hetero_graph(nodes, edges, add_reverse_edges=True)**
        - Assembles node features and edge indices into PyTorch Geometric HeteroData.
        - **SEMANTIC REVERSE EDGES**: Automatically adds reverse edges with semantic names.
          - Forward: ('orders', 'placed_by', 'customers')
@@ -95,10 +110,15 @@ managed_agent:
     create_entity_mapper()  # Reset mapper for new graph
     ```
 
-    ### **2. Schema Analysis**
+    ### **2. Schema Analysis (USE CACHE!)**
     ```python
-    schema = extract_schema_metadata(db_connection)
-    # Analyze tables, relationships, temporal columns
+    # ALWAYS check cache first - TemporalSupervisor may have already analyzed schema
+    cached = get_cached_schema()
+    if cached['found']:
+        schema = cached['schema']
+        db_connection = cached['db_connection']
+    else:
+        schema = extract_schema_metadata(db_connection)
     ```
 
     ### **3. Register All Entities (CRITICAL)**

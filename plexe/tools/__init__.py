@@ -13,3 +13,7 @@ from . import testing
 from . import training
 from . import validation
 from . import io_manager
+
+# Relational Deep Learning (RDL) tools
+from . import graph_processing
+from . import gnn_processing

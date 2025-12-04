@@ -10,9 +10,14 @@ from smolagents import CodeAgent, LiteLLMModel
 from plexe.config import config
 from plexe.internal.common.utils.agents import get_prompt_templates
 from plexe.tools.gnn_processing import (
+    get_hetero_graph_from_registry,
+    load_training_data,
     configure_temporal_sampler,
     build_gnn_model,
     train_gnn_epoch,
+    evaluate_gnn,
+    save_gnn_model,
+    load_gnn_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,9 +53,20 @@ class RelationalGNNSpecialistAgent:
             ),
             model=LiteLLMModel(model_id=self.model_id),
             tools=[
+                # Get graph from GraphArchitect via registry
+                get_hetero_graph_from_registry,
+                # Load training labels from TemporalSupervisor
+                load_training_data,
+                # Temporal-aware data loading
                 configure_temporal_sampler,
+                # Model construction
                 build_gnn_model,
+                # Training & Evaluation
                 train_gnn_epoch,
+                evaluate_gnn,
+                # Model persistence
+                save_gnn_model,
+                load_gnn_model,
             ],
             prompt_templates=get_prompt_templates(
                 base_template_name="code_agent.yaml",
@@ -71,6 +87,8 @@ class RelationalGNNSpecialistAgent:
                 "torch.*",
                 "torch_geometric",
                 "torch_geometric.*",
+                "sklearn",
+                "sklearn.*",
             ],
             step_callbacks=[chain_of_thought_callable],
         )

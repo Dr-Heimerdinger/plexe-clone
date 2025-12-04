@@ -13,10 +13,11 @@ managed_agent:
 
     ## Available Tools (Schema-Agnostic)
 
-    1. **discover_temporal_columns(db_connection_string)** [USE FIRST]
+    1. **discover_temporal_columns(db_connection_string, force_refresh=False)** [USE FIRST]
        - Discovers ALL timestamp/date columns across ALL tables in the database
        - Returns the overall date range of the data
-       - This is essential for understanding the temporal structure before planning splits
+       - **CACHING**: Results are cached in ObjectRegistry and shared with GraphArchitect
+       - Set `force_refresh=True` only if you need to re-query the database
 
     2. **execute_sql_query(db_connection_string, sql_query)**
        - Executes any SELECT query against the database

@@ -3,6 +3,7 @@ Tools for graph processing and construction for the Relational Graph Architect A
 """
 
 import re
+import logging
 from typing import Dict, List, Any, Tuple, Optional, Union
 from smolagents import tool
 import pandas as pd
@@ -13,6 +14,50 @@ import torch
 from sqlalchemy import create_engine, inspect, text
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from torch_geometric.data import HeteroData
+
+# ObjectRegistry for sharing data between agents
+from plexe.core.object_registry import ObjectRegistry
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Unified Schema Cache Key
+# =============================================================================
+# Both TemporalSupervisor and GraphArchitect need schema information.
+# We use a unified cache key to avoid redundant DB queries.
+
+UNIFIED_SCHEMA_CACHE_KEY = "unified_db_schema"
+
+
+def _get_cached_schema(db_connection: str) -> Optional[Dict[str, Any]]:
+    """
+    Check if schema is already cached in ObjectRegistry.
+    Returns cached schema if connection string matches, None otherwise.
+    """
+    try:
+        object_registry = ObjectRegistry()
+        cached = object_registry.get(dict, UNIFIED_SCHEMA_CACHE_KEY)
+        
+        # Verify connection string matches
+        if cached.get("_connection_string") == db_connection:
+            logger.info("Using cached unified schema from ObjectRegistry")
+            return cached
+    except KeyError:
+        pass
+    return None
+
+
+def _cache_schema(db_connection: str, schema: Dict[str, Any]) -> None:
+    """Cache schema in ObjectRegistry with connection string for validation."""
+    try:
+        object_registry = ObjectRegistry()
+        schema["_connection_string"] = db_connection
+        object_registry.register(dict, UNIFIED_SCHEMA_CACHE_KEY, schema, overwrite=True)
+        object_registry.register(str, "db_connection_string", db_connection, overwrite=True)
+        logger.info("Cached unified schema in ObjectRegistry")
+    except Exception as e:
+        logger.warning(f"Could not cache schema: {e}")
 
 
 # =============================================================================
@@ -238,12 +283,16 @@ def _classify_table_type(
 
 
 @tool
-def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
+def extract_schema_metadata(db_connection: str, force_refresh: bool = False) -> Dict[str, Any]:
     """
     Retrieves comprehensive schema metadata for Relational Deep Learning (RDL).
     
     This tool extracts table structures, relationships, and temporal information
     following the RDL paper principles where "Temporality is a First-Class Citizen" (Section 2.1).
+    
+    **IMPORTANT**: This tool uses a unified schema cache. If TemporalSupervisor has 
+    already analyzed the schema using `discover_temporal_columns`, this will reuse
+    that cached information and extend it with graph-specific metadata.
     
     Key features:
     - Identifies temporal columns (τ_v) for time-aware message passing
@@ -255,6 +304,7 @@ def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
     Args:
         db_connection: A database connection string 
                       (e.g., 'sqlite:///data.db', 'postgresql://user:pass@host/db').
+        force_refresh: If True, bypass cache and re-query database. Default False.
 
     Returns:
         A dictionary containing:
@@ -263,6 +313,19 @@ def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
         - 'temporal_summary': Overview of temporal structure across all tables
         - 'recommended_target_tables': Suggested tables for prediction tasks
     """
+    # Check for cached schema first
+    if not force_refresh:
+        cached = _get_cached_schema(db_connection)
+        if cached and "tables" in cached and "relationships" in cached:
+            logger.info("Returning cached schema from unified cache")
+            # Also register under graph_schema_metadata for backwards compatibility
+            try:
+                object_registry = ObjectRegistry()
+                object_registry.register(dict, "graph_schema_metadata", cached, overwrite=True)
+            except Exception:
+                pass
+            return cached
+    
     try:
         engine = create_engine(db_connection)
         inspector = inspect(engine)
@@ -438,6 +501,17 @@ def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
         # Add alias for backwards compatibility
         schema_info["foreign_keys"] = schema_info["relationships"]
 
+        # Cache in unified schema registry
+        _cache_schema(db_connection, schema_info)
+        
+        # Also register under graph_schema_metadata for backwards compatibility
+        try:
+            object_registry = ObjectRegistry()
+            object_registry.register(dict, "graph_schema_metadata", schema_info, overwrite=True)
+            logger.info("Registered graph_schema_metadata in ObjectRegistry")
+        except Exception as e:
+            logger.warning(f"Could not register schema in ObjectRegistry: {e}")
+
         return schema_info
 
     except Exception as e:
@@ -448,6 +522,175 @@ def extract_schema_metadata(db_connection: str) -> Dict[str, Any]:
             "tables": {},
             "relationships": [],
             "temporal_summary": {"tables_with_timestamps": [], "primary_temporal_columns": {}}
+        }
+
+
+@tool
+def get_cached_schema() -> Dict[str, Any]:
+    """
+    Retrieve the cached unified schema from ObjectRegistry.
+    
+    Use this tool when you need schema information that has already been discovered
+    by either TemporalSupervisor (discover_temporal_columns) or GraphArchitect
+    (extract_schema_metadata). This avoids redundant database queries.
+    
+    Returns:
+        Dictionary containing:
+        - 'found': Whether cached schema exists
+        - 'schema': The cached schema (if found)
+        - 'source': Which tool originally cached it ('temporal', 'graph', or 'unknown')
+        - 'db_connection': The database connection string used
+        
+    Example:
+        >>> result = get_cached_schema()
+        >>> if result['found']:
+        ...     tables = result['schema']['tables']
+        ...     print(f"Found {len(tables)} tables in cache")
+    """
+    try:
+        object_registry = ObjectRegistry()
+        
+        # Try unified cache first
+        try:
+            unified = object_registry.get(dict, UNIFIED_SCHEMA_CACHE_KEY)
+            if unified:
+                db_conn = unified.get("_connection_string", "unknown")
+                source = "unified"
+                
+                # Determine which tool populated it
+                if unified.get("tables") and unified.get("relationships"):
+                    source = "graph"
+                elif unified.get("temporal_summary"):
+                    source = "temporal"
+                
+                return {
+                    "found": True,
+                    "schema": unified,
+                    "source": source,
+                    "db_connection": db_conn
+                }
+        except KeyError:
+            pass
+        
+        # Try graph_schema_metadata
+        try:
+            graph_schema = object_registry.get(dict, "graph_schema_metadata")
+            if graph_schema:
+                db_conn = object_registry.get(str, "db_connection_string")
+                return {
+                    "found": True,
+                    "schema": graph_schema,
+                    "source": "graph",
+                    "db_connection": db_conn
+                }
+        except KeyError:
+            pass
+        
+        # Try temporal_schema_info
+        try:
+            temporal_info = object_registry.get(dict, "temporal_schema_info")
+            if temporal_info:
+                db_conn = object_registry.get(str, "db_connection_string")
+                return {
+                    "found": True,
+                    "schema": temporal_info,
+                    "source": "temporal",
+                    "db_connection": db_conn
+                }
+        except KeyError:
+            pass
+        
+        return {
+            "found": False,
+            "schema": None,
+            "source": None,
+            "db_connection": None,
+            "message": "No cached schema found. Use discover_temporal_columns or extract_schema_metadata first."
+        }
+        
+    except Exception as e:
+        return {
+            "found": False,
+            "error": str(e),
+            "schema": None,
+            "source": None,
+            "db_connection": None
+        }
+
+
+@tool
+def load_table_data(
+    db_connection: str,
+    table_name: str,
+    columns: Optional[List[str]] = None,
+    limit: Optional[int] = None,
+    where_clause: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Load data from a database table for graph construction.
+    
+    Use this tool to retrieve actual data from tables for building node features.
+    Combines with extract_schema_metadata which only provides metadata.
+    
+    Args:
+        db_connection: SQLAlchemy connection string.
+        table_name: Name of the table to load.
+        columns: Optional list of columns to select. If None, selects all.
+        limit: Optional row limit for large tables.
+        where_clause: Optional WHERE clause (without 'WHERE' keyword).
+    
+    Returns:
+        Dictionary containing:
+        - 'data': List of row dictionaries
+        - 'columns': List of column names
+        - 'row_count': Number of rows returned
+        - 'dataframe': Pandas DataFrame (for direct use in encoding)
+    
+    Example:
+        >>> result = load_table_data(conn, 'customers', columns=['id', 'name', 'created_at'])
+        >>> df = result['dataframe']
+        >>> ids = df['id'].tolist()
+    """
+    try:
+        engine = create_engine(db_connection)
+        
+        # Build query
+        if columns:
+            cols_str = ', '.join([f'"{c}"' for c in columns])
+        else:
+            cols_str = '*'
+        
+        query = f'SELECT {cols_str} FROM "{table_name}"'
+        
+        if where_clause:
+            query += f' WHERE {where_clause}'
+        
+        if limit:
+            query += f' LIMIT {limit}'
+        
+        with engine.connect() as conn:
+            df = pd.read_sql(text(query), conn)
+        
+        # Register in ObjectRegistry for other tools
+        try:
+            object_registry = ObjectRegistry()
+            object_registry.register(pd.DataFrame, f"table_data_{table_name}", df, overwrite=True)
+        except Exception as e:
+            logger.debug(f"Could not register table data: {e}")
+        
+        return {
+            "data": df.to_dict(orient='records')[:100],  # First 100 for preview
+            "columns": list(df.columns),
+            "row_count": len(df),
+            "dataframe": df,
+            "table_name": table_name
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "error": f"Failed to load table data: {str(e)}",
+            "traceback": traceback.format_exc()
         }
 
 
@@ -1180,11 +1423,76 @@ def build_hetero_graph(
                 data[dst_type, reverse_rel, src_type].edge_index = reverse_edge_index
                 reverse_edges_added.append((dst_type, reverse_rel, src_type))
 
+        # Register graph in ObjectRegistry for GNNSpecialist agent to use
+        try:
+            object_registry = ObjectRegistry()
+            object_registry.register(HeteroData, "hetero_graph", data, overwrite=True)
+            
+            # Also save EntityMapper state for model deployment
+            mapper = get_global_entity_mapper()
+            object_registry.register(dict, "entity_mapper_state", mapper.to_dict(), overwrite=True)
+            
+            logger.info(f"Registered HeteroData graph in ObjectRegistry with {len(data.node_types)} node types")
+        except Exception as e:
+            logger.warning(f"Could not register graph in ObjectRegistry: {e}")
+
         return data
 
     except Exception as e:
         import traceback
         return f"Error building HeteroData: {str(e)}\nTraceback: {traceback.format_exc()}"
+
+
+@tool
+def get_graph_from_registry() -> Dict[str, Any]:
+    """
+    Retrieves the HeteroData graph from ObjectRegistry.
+    
+    Use this tool in RelationalGNNSpecialist to get the graph built by GraphArchitect.
+    
+    Returns:
+        Dictionary containing:
+        - 'graph': The HeteroData object
+        - 'entity_mapper': EntityMapper state dictionary
+        - 'metadata': Graph metadata (node types, edge types, counts)
+    """
+    try:
+        object_registry = ObjectRegistry()
+        
+        # Get graph
+        try:
+            graph = object_registry.get(HeteroData, "hetero_graph")
+        except KeyError:
+            return {"error": "No graph found in registry. Run build_hetero_graph first."}
+        
+        # Get mapper state
+        mapper_state = None
+        try:
+            mapper_state = object_registry.get(dict, "entity_mapper_state")
+        except KeyError:
+            pass
+        
+        # Build metadata
+        metadata = {
+            "node_types": graph.node_types,
+            "edge_types": [str(et) for et in graph.edge_types],
+            "num_nodes": {nt: graph[nt].num_nodes for nt in graph.node_types if hasattr(graph[nt], 'num_nodes')},
+            "num_edges": {str(et): graph[et].edge_index.shape[1] for et in graph.edge_types if hasattr(graph[et], 'edge_index')}
+        }
+        
+        return {
+            "graph": graph,
+            "entity_mapper": mapper_state,
+            "metadata": metadata,
+            "status": "Graph retrieved successfully"
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "error": f"Failed to get graph: {str(e)}",
+            "traceback": traceback.format_exc()
+        }
 
 
 @tool
