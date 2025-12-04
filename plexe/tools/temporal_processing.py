@@ -159,29 +159,70 @@ def execute_sql_query(db_connection_string: str, sql_query: str) -> Dict[str, An
 
 
 @tool
-def generate_training_table_sql(
-    query_logic: str, 
-    window_size: str, 
+def define_training_task(
+    entity_table: str,
+    entity_id_column: str,
+    target_definition: str,
+    prediction_window: str,
     slide_step: str,
+    prediction_horizon: Optional[str] = None,
     db_connection_string: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Defines the schema for a Training Table (T_train) containing EntityID, Seed Time, and Target Label.
-    This tool also discovers the temporal range of data in the database.
+    Step 1: Define the training task metadata and validate against DB time range.
     
-    This is a planning tool - it helps you understand the data range and plan your temporal splits.
-    Use discover_temporal_columns first to understand the schema, then use this to define your training table.
+    This tool defines the conceptual structure of a Training Table (T_train) following the RDL paper:
+    - EntityID: The primary entity for prediction (e.g., user_id)
+    - SeedTime: The observation timestamp for feature computation
+    - TargetLabel: The label to predict (computed based on target_definition)
+    
+    Use discover_temporal_columns first to understand the schema, then use this to define the task.
+    After defining the task, use generate_sql_implementation to create executable SQL.
 
     Args:
-        query_logic: Description of the logic to define the target label (e.g., "user makes a purchase in next 7 days")
-        window_size: The duration of the labeling window (e.g., '7d', '2d')
-        slide_step: The step size for sliding the window (e.g., '1d', '2d')
+        entity_table: The primary entity table name (e.g., 'users', 'customers')
+        entity_id_column: The column name for entity ID in the entity table (e.g., 'user_id', 'customer_id')
+        target_definition: Natural language description of the target label logic 
+                          (e.g., "user makes a purchase in the next 7 days", 
+                           "customer churns within prediction window")
+        prediction_window: The duration for computing labels (e.g., '7d', '14d', '30d')
+                          This defines the time span for label computation from seed time.
+        slide_step: The step size for sliding the seed time window (e.g., '1d', '7d')
+                   Smaller steps = more training examples but higher correlation.
+        prediction_horizon: Optional. How far into the future to predict (e.g., '1d', '7d').
+                           If not provided, defaults to same as prediction_window.
+                           Used to ensure proper temporal gap to prevent leakage.
         db_connection_string: Database connection string. If not provided, will try to get from ObjectRegistry.
 
     Returns:
-        A dictionary containing the training table definition and discovered date ranges.
+        A dictionary containing:
+        - status: Task definition status
+        - task_schema: The schema of the training table [EntityID, SeedTime, TargetLabel]
+        - metadata: Task configuration including entity table, windows, and date ranges
+        - next_step: Instructions for generating SQL implementation
     """
     object_registry = ObjectRegistry()
+    
+    # Parse window sizes to days for validation
+    def parse_duration_to_days(duration_str: str) -> int:
+        """Parse duration string like '7d', '2w', '1m' to days."""
+        duration_str = duration_str.strip().lower()
+        if duration_str.endswith('d'):
+            return int(duration_str[:-1])
+        elif duration_str.endswith('w'):
+            return int(duration_str[:-1]) * 7
+        elif duration_str.endswith('m'):
+            return int(duration_str[:-1]) * 30
+        else:
+            # Try to parse as integer (assume days)
+            try:
+                return int(duration_str)
+            except ValueError:
+                return 7  # Default to 7 days
+    
+    prediction_window_days = parse_duration_to_days(prediction_window)
+    slide_step_days = parse_duration_to_days(slide_step)
+    horizon_days = parse_duration_to_days(prediction_horizon) if prediction_horizon else prediction_window_days
     
     # Try to get the database connection string
     conn_string = db_connection_string
@@ -192,42 +233,365 @@ def generate_training_table_sql(
         except KeyError:
             pass
     
-    # Try to get cached temporal info
+    # Try to get cached temporal info or discover it
     temporal_info = None
     try:
         temporal_info = object_registry.get(dict, "temporal_schema_info")
     except KeyError:
         logger.debug("Cache not found temporal_info, will re-discover.")
-        pass
     
     # If we have a connection but no temporal info, discover it
     if conn_string and not temporal_info:
+        # Use the internal function to avoid decorator overhead
         temporal_info = discover_temporal_columns.__wrapped__(conn_string)
     
-    result = {
-        "columns": ["EntityID", "SeedTime", "TargetLabel"],
-        "window_size": window_size,
-        "slide_step": slide_step,
-        "logic": query_logic,
-        "status": "Training table definition generated.",
-    }
+    # Extract date range information
+    min_date = None
+    max_date = None
+    temporal_tables = []
     
     if temporal_info and temporal_info.get("overall_range"):
-        result["data_min_date"] = temporal_info["overall_range"].get("min")
-        result["data_max_date"] = temporal_info["overall_range"].get("max")
-        result["temporal_tables"] = list(temporal_info.get("tables", {}).keys())
-        
-        if result["data_min_date"] and result["data_max_date"]:
-            result["recommendation"] = f"Data spans from {result['data_min_date']} to {result['data_max_date']}. Choose temporal split dates within this range."
-    else:
-        result["data_min_date"] = None
-        result["data_max_date"] = None
-        result["warning"] = "Could not determine date range. Use discover_temporal_columns with a valid connection string first."
+        min_date = temporal_info["overall_range"].get("min")
+        max_date = temporal_info["overall_range"].get("max")
+        temporal_tables = list(temporal_info.get("tables", {}).keys())
     
-    # Store the training table metadata
-    object_registry.register(dict, "training_table_metadata", result, overwrite=True)
+    # Build the task metadata
+    task_metadata = {
+        "entity_table": entity_table,
+        "entity_id_column": entity_id_column,
+        "target_definition": target_definition,
+        "prediction_window": prediction_window,
+        "prediction_window_days": prediction_window_days,
+        "slide_step": slide_step,
+        "slide_step_days": slide_step_days,
+        "prediction_horizon": prediction_horizon or prediction_window,
+        "prediction_horizon_days": horizon_days,
+        "available_date_range": {
+            "min": min_date,
+            "max": max_date
+        },
+        "temporal_tables": temporal_tables
+    }
+    
+    # Build recommendations
+    recommendations = []
+    warnings = []
+    
+    if min_date and max_date:
+        recommendations.append(
+            f"Data spans from {min_date} to {max_date}. "
+            f"Choose temporal split dates within this range."
+        )
+        
+        # Validate entity table exists in temporal tables
+        if entity_table not in temporal_tables and temporal_tables:
+            warnings.append(
+                f"Entity table '{entity_table}' not found in tables with temporal columns. "
+                f"Available temporal tables: {temporal_tables}. "
+                f"Ensure proper join logic in SQL implementation."
+            )
+    else:
+        warnings.append(
+            "Could not determine date range. Use discover_temporal_columns with a valid connection string first."
+        )
+    
+    # Validate slide_step <= prediction_window
+    if slide_step_days > prediction_window_days:
+        warnings.append(
+            f"slide_step ({slide_step}) is larger than prediction_window ({prediction_window}). "
+            f"This may result in gaps between training examples."
+        )
+    
+    result = {
+        "status": "Task defined successfully",
+        "task_schema": ["EntityID", "SeedTime", "TargetLabel"],
+        "metadata": task_metadata,
+        "recommendations": recommendations if recommendations else None,
+        "warnings": warnings if warnings else None,
+        "next_step": "Use generate_sql_implementation(task_metadata, dialect) to create executable SQL for this task."
+    }
+    
+    # Store the task metadata for use by generate_sql_implementation
+    object_registry.register(dict, "training_task_metadata", result, overwrite=True)
+    
+    # Also store with old key for backward compatibility
+    object_registry.register(dict, "training_table_metadata", {
+        "columns": ["EntityID", "SeedTime", "TargetLabel"],
+        "window_size": prediction_window,
+        "slide_step": slide_step,
+        "logic": target_definition,
+        "data_min_date": min_date,
+        "data_max_date": max_date,
+        "temporal_tables": temporal_tables,
+        "status": "Training table definition generated."
+    }, overwrite=True)
+    
+    logger.info(f"Training task defined: entity={entity_table}, window={prediction_window}, horizon={prediction_horizon or prediction_window}")
     
     return result
+
+
+@tool
+def generate_sql_implementation(
+    task_metadata: Dict[str, Any],
+    dialect: str = "postgresql",
+    include_create_table: bool = False,
+    custom_label_sql: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Step 2: Generate executable SQL to create the training table based on task metadata.
+    
+    This tool transforms the task definition from define_training_task into actual SQL statements.
+    It generates SQL for:
+    1. Creating seed times with sliding window
+    2. Computing target labels based on the target_definition
+    3. Joining entity features with temporal constraints
+    
+    The generated SQL follows RDL paper principles:
+    - Labels are computed from [SeedTime, SeedTime + prediction_window]
+    - Features should only use data from (-∞, SeedTime] to prevent leakage
+
+    Args:
+        task_metadata: The metadata dictionary from define_training_task (or the full result dict)
+        dialect: SQL dialect to use ('postgresql', 'mysql', 'sqlite', 'bigquery'). Default: 'postgresql'
+        include_create_table: If True, wraps the query in CREATE TABLE statement. Default: False
+        custom_label_sql: Optional custom SQL expression for label computation. If not provided,
+                         a template will be generated based on target_definition that needs LLM refinement.
+
+    Returns:
+        A dictionary containing:
+        - sql_query: The generated SQL query (may need LLM refinement for complex label logic)
+        - sql_create_table: CREATE TABLE version if include_create_table=True
+        - parameters: Placeholders that need to be filled
+        - notes: Important notes about the generated SQL
+        - requires_refinement: Boolean indicating if LLM should refine the label logic
+    """
+    object_registry = ObjectRegistry()
+    
+    # Extract metadata - handle both direct metadata and wrapped result
+    if "metadata" in task_metadata:
+        meta = task_metadata["metadata"]
+    else:
+        meta = task_metadata
+    
+    entity_table = meta.get("entity_table", "entities")
+    entity_id_column = meta.get("entity_id_column", "entity_id")
+    target_definition = meta.get("target_definition", "")
+    prediction_window = meta.get("prediction_window", "7d")
+    prediction_window_days = meta.get("prediction_window_days", 7)
+    slide_step = meta.get("slide_step", "1d")
+    slide_step_days = meta.get("slide_step_days", 1)
+    date_range = meta.get("available_date_range", {})
+    min_date = date_range.get("min")
+    max_date = date_range.get("max")
+    
+    # Dialect-specific syntax
+    dialect_config = {
+        "postgresql": {
+            "interval": lambda days: f"INTERVAL '{days} days'",
+            "date_trunc": lambda col, unit: f"DATE_TRUNC('{unit}', {col})",
+            "generate_series": True,
+            "bool_type": "BOOLEAN",
+            "timestamp_type": "TIMESTAMP"
+        },
+        "mysql": {
+            "interval": lambda days: f"INTERVAL {days} DAY",
+            "date_trunc": lambda col, unit: f"DATE({col})" if unit == "day" else f"DATE_FORMAT({col}, '%Y-%m-01')",
+            "generate_series": False,
+            "bool_type": "TINYINT(1)",
+            "timestamp_type": "DATETIME"
+        },
+        "sqlite": {
+            "interval": lambda days: f"'{days} days'",
+            "date_trunc": lambda col, unit: f"DATE({col})",
+            "generate_series": False,
+            "bool_type": "INTEGER",
+            "timestamp_type": "TEXT"
+        },
+        "bigquery": {
+            "interval": lambda days: f"INTERVAL {days} DAY",
+            "date_trunc": lambda col, unit: f"DATE_TRUNC({col}, {unit.upper()})",
+            "generate_series": False,
+            "bool_type": "BOOL",
+            "timestamp_type": "TIMESTAMP"
+        }
+    }
+    
+    config = dialect_config.get(dialect.lower(), dialect_config["postgresql"])
+    
+    # Generate the base SQL structure
+    notes = []
+    parameters = {}
+    requires_refinement = True
+    
+    # Placeholder for label logic - this is what needs LLM refinement
+    if custom_label_sql:
+        label_sql = custom_label_sql
+        requires_refinement = False
+        notes.append("Using custom label SQL provided by user.")
+    else:
+        # Generate a template based on target_definition
+        label_sql = _generate_label_sql_template(target_definition, entity_id_column, config)
+        notes.append(
+            f"Label SQL is a TEMPLATE based on target_definition: '{target_definition}'. "
+            "You should refine this SQL or provide custom_label_sql for accurate label computation."
+        )
+        parameters["label_logic"] = f"Refine based on: {target_definition}"
+    
+    # Generate seed time series SQL
+    if config["generate_series"]:
+        # PostgreSQL-style with generate_series
+        seed_time_sql = f"""
+-- Generate seed times using sliding window
+WITH seed_times AS (
+    SELECT generate_series(
+        '{min_date}'::timestamp,
+        '{max_date}'::timestamp - {config['interval'](prediction_window_days)},
+        {config['interval'](slide_step_days)}
+    ) AS seed_time
+)"""
+    else:
+        # Fallback for dialects without generate_series
+        seed_time_sql = f"""
+-- Generate seed times using sliding window
+-- NOTE: For {dialect}, you may need to create a calendar/numbers table
+-- or use a recursive CTE to generate the seed time series
+WITH RECURSIVE seed_times AS (
+    SELECT CAST('{min_date}' AS {config['timestamp_type']}) AS seed_time
+    UNION ALL
+    SELECT seed_time + {config['interval'](slide_step_days)}
+    FROM seed_times
+    WHERE seed_time < CAST('{max_date}' AS {config['timestamp_type']}) - {config['interval'](prediction_window_days)}
+)"""
+    
+    # Main query structure
+    main_query = f"""
+{seed_time_sql},
+
+-- Get all entities from the entity table
+entities AS (
+    SELECT DISTINCT {entity_id_column} AS entity_id
+    FROM {entity_table}
+),
+
+-- Cross join to create all (entity, seed_time) combinations
+entity_seed_pairs AS (
+    SELECT 
+        e.entity_id,
+        s.seed_time
+    FROM entities e
+    CROSS JOIN seed_times s
+),
+
+-- Compute labels for each (entity, seed_time) pair
+-- Label window: [seed_time, seed_time + {prediction_window}]
+training_labels AS (
+    SELECT 
+        esp.entity_id AS "EntityID",
+        esp.seed_time AS "SeedTime",
+        {label_sql} AS "TargetLabel"
+    FROM entity_seed_pairs esp
+    -- LEFT JOIN with event/transaction table to compute labels
+    -- TODO: Add appropriate JOIN based on your schema
+    LEFT JOIN {{EVENT_TABLE}} evt ON 
+        evt.{entity_id_column} = esp.entity_id
+        AND evt.{{TIMESTAMP_COLUMN}} >= esp.seed_time
+        AND evt.{{TIMESTAMP_COLUMN}} < esp.seed_time + {config['interval'](prediction_window_days)}
+    GROUP BY esp.entity_id, esp.seed_time
+)
+
+SELECT 
+    "EntityID",
+    "SeedTime",
+    "TargetLabel"
+FROM training_labels
+ORDER BY "SeedTime", "EntityID"
+"""
+    
+    # Add parameters that need to be filled
+    parameters.update({
+        "EVENT_TABLE": "The table containing events/transactions for label computation",
+        "TIMESTAMP_COLUMN": "The timestamp column in the event table"
+    })
+    
+    # Generate CREATE TABLE version if requested
+    sql_create_table = None
+    if include_create_table:
+        sql_create_table = f"""
+CREATE TABLE training_table AS
+{main_query};
+
+-- Add indexes for efficient querying
+CREATE INDEX idx_training_seed_time ON training_table ("SeedTime");
+CREATE INDEX idx_training_entity ON training_table ("EntityID");
+"""
+    
+    # Additional notes based on task
+    notes.extend([
+        f"Prediction window: {prediction_window} ({prediction_window_days} days)",
+        f"Slide step: {slide_step} ({slide_step_days} days)",
+        f"SQL dialect: {dialect}",
+        "Replace {{EVENT_TABLE}} and {{TIMESTAMP_COLUMN}} with actual table/column names.",
+        "Ensure proper temporal filtering to prevent data leakage in feature computation."
+    ])
+    
+    result = {
+        "status": "SQL generated",
+        "sql_query": main_query.strip(),
+        "sql_create_table": sql_create_table.strip() if sql_create_table else None,
+        "parameters": parameters,
+        "notes": notes,
+        "requires_refinement": requires_refinement,
+        "dialect": dialect,
+        "metadata_used": {
+            "entity_table": entity_table,
+            "entity_id_column": entity_id_column,
+            "prediction_window_days": prediction_window_days,
+            "slide_step_days": slide_step_days
+        }
+    }
+    
+    # Store the generated SQL for reference
+    object_registry.register(dict, "training_table_sql", result, overwrite=True)
+    
+    logger.info(f"SQL implementation generated for dialect={dialect}, requires_refinement={requires_refinement}")
+    
+    return result
+
+
+def _generate_label_sql_template(target_definition: str, entity_id_column: str, config: dict) -> str:
+    """
+    Generate a SQL template for label computation based on natural language target definition.
+    
+    This is a heuristic-based template generator. For production use, this should be
+    replaced with LLM-based SQL generation.
+    """
+    target_lower = target_definition.lower()
+    
+    # Common patterns
+    if any(word in target_lower for word in ["purchase", "buy", "order", "transaction"]):
+        return "CASE WHEN COUNT(evt.{}) > 0 THEN 1 ELSE 0 END".format(entity_id_column)
+    
+    elif any(word in target_lower for word in ["churn", "leave", "cancel", "unsubscribe"]):
+        return "CASE WHEN COUNT(evt.{}) = 0 THEN 1 ELSE 0 END".format(entity_id_column)
+    
+    elif any(word in target_lower for word in ["click", "view", "visit", "engage"]):
+        return "CASE WHEN COUNT(evt.{}) > 0 THEN 1 ELSE 0 END".format(entity_id_column)
+    
+    elif any(word in target_lower for word in ["amount", "sum", "total", "revenue"]):
+        return "COALESCE(SUM(evt.amount), 0)"
+    
+    elif any(word in target_lower for word in ["count", "frequency", "times"]):
+        return "COUNT(evt.{})".format(entity_id_column)
+    
+    else:
+        # Generic binary classification template
+        return f"""
+        -- TODO: Refine this label logic based on: {target_definition}
+        CASE 
+            WHEN COUNT(evt.{entity_id_column}) > 0 THEN 1 
+            ELSE 0 
+        END"""
 
 
 @tool
@@ -249,7 +613,7 @@ def temporal_split(
     The gap between val_timestamp and test_timestamp must be >= window_size_days.
 
     Args:
-        training_table: The training table metadata from generate_training_table_sql
+        training_table: The training table metadata from define_training_task
         val_timestamp: The cutoff timestamp for validation inputs (format: YYYY-MM-DD). 
                        Validation features use data <= val_timestamp, labels use data in 
                        [val_timestamp, val_timestamp + window_size_days].
@@ -265,9 +629,18 @@ def temporal_split(
     """
     object_registry = ObjectRegistry()
     
-    # Get date ranges from training table
-    data_min_date = training_table.get("data_min_date")
-    data_max_date = training_table.get("data_max_date")
+    # Get date ranges from training table - support both old and new format
+    # New format from define_training_task has metadata.available_date_range
+    # Old format has data_min_date/data_max_date directly
+    if "metadata" in training_table:
+        # New format from define_training_task
+        date_range = training_table.get("metadata", {}).get("available_date_range", {})
+        data_min_date = date_range.get("min")
+        data_max_date = date_range.get("max")
+    else:
+        # Legacy format
+        data_min_date = training_table.get("data_min_date")
+        data_max_date = training_table.get("data_max_date")
     
     # Parse the provided timestamps
     try:

@@ -23,29 +23,37 @@ managed_agent:
        - Use this to explore the data, understand relationships, and build custom queries
        - Great for prototyping and validating your understanding
 
-    3. **generate_training_table_sql(query_logic, window_size, slide_step, db_connection_string)**
-       - Defines the training table schema and discovers date ranges
+    3. **define_training_task(entity_table, entity_id_column, target_definition, prediction_window, slide_step, prediction_horizon, db_connection_string)**
+       - Step 1: Define the training task metadata following RDL paper structure
+       - Specifies entity table, ID column, and target label definition
+       - Returns task_schema [EntityID, SeedTime, TargetLabel] and metadata with date ranges
        - Use after discover_temporal_columns to formalize your task definition
 
-    4. **temporal_split(training_table, val_timestamp, test_timestamp, window_size_days)**
+    4. **generate_sql_implementation(task_metadata, dialect, include_create_table, custom_label_sql)**
+       - Step 2: Generate executable SQL to create the training table
+       - Transforms task definition into actual SQL with sliding window logic
+       - Supports dialects: postgresql, mysql, sqlite, bigquery
+       - Returns SQL query template that may need refinement for complex label logic
+
+    5. **temporal_split(training_table, val_timestamp, test_timestamp, window_size_days)**
        - Validates and records your temporal split configuration
        - Checks that your dates are within the actual data range
        - **CRITICAL**: Set window_size_days to your prediction horizon (e.g., 2 for "predict in next 2 days")
        - Validates that val_timestamp + window_size_days <= test_timestamp to prevent DATA LEAKAGE
        - Returns warnings if validation labels would overlap with test input data
 
-    5. **create_temporal_dataset(db_connection_string, entity_table, entity_id_column, timestamp_column, label_query, feature_query, train_end_date, val_end_date, test_end_date, window_size_days, num_train_windows, train_stride_days, output_dir)**
+    6. **create_temporal_dataset(db_connection_string, entity_table, entity_id_column, timestamp_column, label_query, feature_query, train_end_date, val_end_date, test_end_date, window_size_days, num_train_windows, train_stride_days, output_dir)**
        - Creates train/val/test datasets using RDL Sliding Window Sampling strategy
        - **CRITICAL**: Implements multiple training snapshots moving backwards in time
        - Training: Multiple windows (num_train_windows) stepping back by train_stride_days
        - Validation/Test: Single snapshot at their respective cutoff dates
        - Example: num_train_windows=12, train_stride_days=30 = 12 monthly snapshots for training
 
-    6. **generate_temporal_splits_from_db(db_connection_string, window_days, num_train_windows, ...)**
+    7. **generate_temporal_splits_from_db(db_connection_string, window_days, num_train_windows, ...)**
        - Convenience tool that auto-discovers schema and suggests split points
        - Use when you want a quick overview of temporal structure
 
-    7. **validate_temporal_consistency(graph_obj_name, training_table_name, n_samples, time_attr)**
+    8. **validate_temporal_consistency(graph_obj_name, training_table_name, n_samples, time_attr)**
        - Performs sampling-based sanity check on Graph + Training Table
        - Verifies τ(neighbor) <= t: neighbors must not be from the future
        - Reports "Leakage Risk" percentage requiring temporal filtering
@@ -71,11 +79,21 @@ managed_agent:
     - `SELECT * FROM table_name LIMIT 5`
     - `SELECT column_name, COUNT(*) FROM table GROUP BY column_name`
 
-    ### **Step 3: Define the Prediction Task**
-    Based on the user's intent and your data exploration:
-    - Identify the target entity (e.g., users, customers)
-    - Define what you're predicting (the label)
-    - Define the observation window (features) and prediction window (labels)
+    ### **Step 3: Define the Training Task (2-Step Process)**
+    
+    **Step 3a: Define Task Metadata**
+    Use `define_training_task` to specify:
+    - `entity_table`: The main entity table (e.g., 'users', 'customers')
+    - `entity_id_column`: The ID column (e.g., 'user_id')
+    - `target_definition`: What you're predicting in natural language (e.g., "user makes purchase in next 7 days")
+    - `prediction_window`: Label computation window (e.g., '7d')
+    - `slide_step`: Seed time sliding step (e.g., '1d')
+    
+    **Step 3b: Generate SQL Implementation**
+    Use `generate_sql_implementation` to:
+    - Transform task definition into executable SQL
+    - Get SQL template for creating training table with sliding window
+    - Review and refine the label logic SQL if needed
 
     ### **Step 4: Choose Temporal Split Points**
     Based on the actual date range discovered:

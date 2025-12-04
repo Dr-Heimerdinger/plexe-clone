@@ -12,7 +12,8 @@ from plexe.internal.common.utils.agents import get_prompt_templates
 from plexe.tools.temporal_processing import (
     discover_temporal_columns,
     execute_sql_query,
-    generate_training_table_sql,
+    define_training_task,
+    generate_sql_implementation,
     temporal_split,
     validate_temporal_consistency,
     create_temporal_dataset,
@@ -55,7 +56,8 @@ class TemporalTaskSupervisorAgent:
             tools=[
                 discover_temporal_columns,
                 execute_sql_query,
-                generate_training_table_sql,
+                define_training_task,
+                generate_sql_implementation,
                 temporal_split,
                 validate_temporal_consistency,
                 create_temporal_dataset,
