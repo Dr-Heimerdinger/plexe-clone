@@ -38,7 +38,7 @@ def test_model_with_ray(sample_dataset):
     # Set a short timeout for testing
     model.build(
         datasets=[sample_dataset],
-        provider="gemini/gemini-2.5-flash",
+        provider="gemini/gemini-2.5-pro",
         timeout=300,  # 5 minutes max
         run_timeout=60,  # 1 minute per run
     )

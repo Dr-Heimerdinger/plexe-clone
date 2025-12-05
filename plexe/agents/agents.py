@@ -92,18 +92,18 @@ class PlexeAgent:
             chain_of_thought_callable: Optional callable for chain of thought logging
         """
         self.orchestrator_model_id = orchestrator_model_id or os.environ.get(
-            "PLEXE_ORCHESTRATOR_MODEL", "gemini/gemini-2.5-flash"
+            "PLEXE_ORCHESTRATOR_MODEL", "gemini/gemini-2.5-pro"
         )
         self.ml_researcher_model_id = ml_researcher_model_id or os.environ.get(
-            "PLEXE_ML_RESEARCHER_MODEL", "gemini/gemini-2.5-flash"
+            "PLEXE_ML_RESEARCHER_MODEL", "gemini/gemini-2.5-pro"
         )
         self.ml_engineer_model_id = ml_engineer_model_id or os.environ.get(
-            "PLEXE_ML_ENGINEER_MODEL", "gemini/gemini-2.5-flash"
+            "PLEXE_ML_ENGINEER_MODEL", "gemini/gemini-2.5-pro"
         )
         self.ml_ops_engineer_model_id = ml_ops_engineer_model_id or os.environ.get(
-            "PLEXE_ML_OPS_ENGINEER_MODEL", "gemini/gemini-2.5-flash"
+            "PLEXE_ML_OPS_ENGINEER_MODEL", "gemini/gemini-2.5-pro"
         )
-        self.tool_model_id = tool_model_id or os.environ.get("PLEXE_TOOL_MODEL", "gemini/gemini-2.5-flash")
+        self.tool_model_id = tool_model_id or os.environ.get("PLEXE_TOOL_MODEL", "gemini/gemini-2.5-pro")
         self.verbose = verbose
         self.max_steps = max_steps
         self.distributed = distributed

@@ -666,7 +666,7 @@ def get_training_datasets() -> Dict[str, str]:
         temporal_info = object_registry.get(dict, "temporal_split_info")
         # If we have temporal split info, we can assume the datasets are conceptually available
         # even if not registered as TabularConvertible (since they might be in DB)
-        return {"train": "posts_train", "validation": "posts_val"}  # Convention for RDL  # Convention for RDL
+        return {"train": "temporal_train", "validation": "temporal_val"}  # Convention for RDL
     except KeyError:
         pass  # Not an RDL task or split not done yet
 

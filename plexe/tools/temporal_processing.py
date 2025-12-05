@@ -118,23 +118,9 @@ def _cache_temporal_to_unified(db_connection: str, temporal_info: Dict[str, Any]
         logger.info("Created unified schema cache with temporal info")
 
 
-@tool
-def discover_temporal_columns(db_connection_string: str, force_refresh: bool = False) -> Dict[str, Any]:
+def _discover_temporal_columns_impl(db_connection_string: str, force_refresh: bool = False) -> Dict[str, Any]:
     """
-    Discovers all timestamp/date columns across all tables in the database.
-    Use this to understand the temporal structure of the data before creating temporal splits.
-    
-    **IMPORTANT**: This tool uses a unified schema cache shared with GraphArchitect's
-    `extract_schema_metadata`. If schema has already been analyzed, cached info is returned.
-    
-    Args:
-        db_connection_string: SQLAlchemy connection string (e.g., 'postgresql+psycopg2://user:pass@host:port/db')
-        force_refresh: If True, bypass cache and re-query database. Default False.
-    
-    Returns:
-        A dictionary containing:
-        - tables: Dict mapping table names to lists of temporal columns with their date ranges
-        - overall_range: The min and max dates across all temporal columns
+    Internal implementation of discover_temporal_columns.
     """
     # Check cache first
     if not force_refresh:
@@ -202,6 +188,27 @@ def discover_temporal_columns(db_connection_string: str, force_refresh: bool = F
     except Exception as e:
         logger.error(f"Error discovering temporal columns: {e}")
         return {"error": str(e), "tables": {}, "overall_range": {"min": None, "max": None}}
+
+
+@tool
+def discover_temporal_columns(db_connection_string: str, force_refresh: bool = False) -> Dict[str, Any]:
+    """
+    Discovers all timestamp/date columns across all tables in the database.
+    Use this to understand the temporal structure of the data before creating temporal splits.
+    
+    **IMPORTANT**: This tool uses a unified schema cache shared with GraphArchitect's
+    `extract_schema_metadata`. If schema has already been analyzed, cached info is returned.
+    
+    Args:
+        db_connection_string: SQLAlchemy connection string (e.g., 'postgresql+psycopg2://user:pass@host:port/db')
+        force_refresh: If True, bypass cache and re-query database. Default False.
+    
+    Returns:
+        A dictionary containing:
+        - tables: Dict mapping table names to lists of temporal columns with their date ranges
+        - overall_range: The min and max dates across all temporal columns
+    """
+    return _discover_temporal_columns_impl(db_connection_string, force_refresh)
 
 
 @tool
@@ -356,7 +363,7 @@ def define_training_task(
     # If we have a connection but no temporal info, discover it
     if conn_string and not temporal_info:
         # Use the internal function to avoid decorator overhead
-        temporal_info = discover_temporal_columns.__wrapped__(conn_string)
+        temporal_info = _discover_temporal_columns_impl(conn_string)
     
     # Extract date range information
     min_date = None
@@ -1384,18 +1391,46 @@ def create_temporal_dataset(
                 return pd.DataFrame()
             
             # Merge labels and features
-            if entity_id_column in labels_df.columns and entity_id_column in features_df.columns:
-                df = features_df.merge(labels_df, on=entity_id_column, how="inner")
+            # Robustly find entity_id column in both dataframes (case-insensitive)
+            feat_id_col = next((c for c in features_df.columns if c.lower() == entity_id_column.lower()), None)
+            lbl_id_col = next((c for c in labels_df.columns if c.lower() == entity_id_column.lower()), None)
+
+            if feat_id_col and lbl_id_col:
+                df = features_df.merge(labels_df, left_on=feat_id_col, right_on=lbl_id_col, how="inner")
+                # If names differ, keep the one matching entity_id_column or the first one
+                final_id_col = feat_id_col
             else:
                 # Fallback: concat (unsafe, may have misaligned rows)
-                logger.warning(f"Entity column '{entity_id_column}' not found in both dataframes. Using concat.")
+                logger.warning(f"Entity column '{entity_id_column}' not found in both dataframes (feat={feat_id_col}, lbl={lbl_id_col}). Using concat.")
                 df = pd.concat([features_df, labels_df], axis=1)
+                final_id_col = feat_id_col if feat_id_col else (lbl_id_col if lbl_id_col else df.columns[0])
             
             # Add metadata columns (important for Temporal GNN training)
             df["seed_time"] = seed_time
-            df["seed_time_str"] = seed_time.strftime("%Y-%m-%d")
-            df["split"] = split_name
+            # df["seed_time_str"] = seed_time.strftime("%Y-%m-%d") # Removed to reduce columns
+            # df["split"] = split_name # Removed to reduce columns
             
+            # Filter columns to match RDL Training Table format: [EntityID, SeedTime, Label]
+            # We assume the label column is named 'label' or is the last column in labels_df
+            label_col = "label"
+            if label_col not in df.columns:
+                # Try to find it in labels_df
+                label_candidates = [c for c in labels_df.columns if c.lower() != entity_id_column.lower()]
+                if label_candidates:
+                    label_col = label_candidates[0]
+            
+            # Select and reorder columns
+            cols_to_keep = [final_id_col, "seed_time"]
+            if label_col in df.columns:
+                cols_to_keep.append(label_col)
+            
+            df = df[cols_to_keep]
+            
+            # Rename ID column to standard 'entity_id' if requested, or keep original
+            # The user wants 3 columns. Let's standardize to entity_id_column name provided
+            if final_id_col != entity_id_column:
+                 df = df.rename(columns={final_id_col: entity_id_column})
+
             return df
         
         # 2. GENERATE TRAINING DATA (Sliding Window Strategy - RDL Paper Figure 3b)

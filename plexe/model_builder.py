@@ -37,7 +37,7 @@ class ModelBuilder:
 
     def __init__(
         self,
-        provider: str | ProviderConfig = "gemini/gemini-2.5-flash",
+        provider: str | ProviderConfig = "gemini/gemini-2.5-pro",
         verbose: bool = False,
         distributed: bool = False,
         working_dir: Optional[str] = None,

@@ -6,7 +6,7 @@
 services:
   postgres:
     image: postgres:15
-    restart: "no"
+    # restart: "no"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mlflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow}
@@ -15,12 +15,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - plexe-net
 
   mlflow:
     build:
       context: .
       dockerfile: Dockerfile.mlflow
-    restart: "no"
+    # restart: "no"
     depends_on:
       - postgres
     environment:
@@ -32,21 +34,25 @@ services:
       - ./mlruns:/mlruns
     ports:
       - "5000:5000"
+    networks:
+      - plexe-net
 
   pgadmin:
     image: dpage/pgadmin4:7
-    restart: "no"
+    # restart: "no"
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
     ports:
       - "8080:80"
+    networks:
+      - plexe-net
 
   frontend:
     build:
       context: ./plexe/ui/frontend
       dockerfile: Dockerfile.dev
-    restart: "no"
+    # restart: "no"
     volumes:
       - ./plexe/ui/frontend/src:/app/src
       - ./plexe/ui/frontend/index.html:/app/index.html
@@ -56,12 +62,14 @@ services:
       - "3000:3000"
     environment:
       VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:8000}
+    networks:
+      - plexe-net
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    restart: "no"
+    # restart: no
     depends_on:
       postgres:
         condition: service_started
@@ -75,7 +83,13 @@ services:
       - .:/app
     ports:
       - "8000:8000"
+    networks:
+      - plexe-net
 
 
 volumes:
   postgres_data:
+
+networks:
+  plexe-net:
+    driver: bridge

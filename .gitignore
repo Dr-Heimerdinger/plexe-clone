@@ -307,5 +307,10 @@ data/
 data/uploads/
 data/uploads/*
 
+# temporal_datasets/*
+# temporal_datasets/
+# output_datasets/*
+# output_datasets/
+
 model-from-chat.tar.gz
 model_output_from_chat/

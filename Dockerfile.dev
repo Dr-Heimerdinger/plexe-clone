@@ -33,6 +33,11 @@ RUN poetry config virtualenvs.create false && \
     (echo "First attempt failed, retrying..." && sleep 10 && poetry install --no-interaction --no-ansi --no-root --only main --extras chatui) || \
     (echo "Second attempt failed, retrying with timeout increase..." && sleep 15 && poetry install --no-interaction --no-ansi --no-root --only main --extras chatui)
 
+# Install PyG dependencies (pyg_lib, etc.) for GNN support
+# Assuming torch 2.3.0+cpu is installed by poetry
+RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.0+cpu.html
+
+
 # RUN pip install --no-cache-dir python-multipart
 
 FROM deps as app

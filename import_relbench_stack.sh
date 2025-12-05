@@ -25,6 +25,17 @@ fi
 echo "✓ Container đang chạy"
 echo ""
 
+# Kiểm tra và tạo database
+echo "🔍 Kiểm tra database..."
+if ! docker exec $CONTAINER_NAME psql -U $DB_USER -lqt | cut -d \| -f 1 | grep -qw $DB_NAME; then
+    echo "⚠️ Database $DB_NAME chưa tồn tại. Đang tạo..."
+    docker exec $CONTAINER_NAME psql -U $DB_USER -d postgres -c "CREATE DATABASE $DB_NAME;"
+    echo "✓ Database $DB_NAME đã được tạo."
+else
+    echo "✓ Database $DB_NAME đã tồn tại."
+fi
+echo ""
+
 # Copy CSV files vào container
 echo "📁 Copy CSV files vào container..."
 docker cp "$CSV_SOURCE/users.csv" $CONTAINER_NAME:/tmp/
