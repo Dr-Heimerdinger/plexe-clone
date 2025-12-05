@@ -6,7 +6,7 @@
 services:
   postgres:
     image: postgres:15
-    restart: unless-stopped
+    restart: "no"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mlflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow}
@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.mlflow
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       - postgres
     environment:
@@ -35,7 +35,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:7
-    restart: unless-stopped
+    restart: "no"
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
@@ -46,7 +46,7 @@ services:
     build:
       context: ./plexe/ui/frontend
       dockerfile: Dockerfile.dev
-    restart: unless-stopped
+    restart: "no"
     volumes:
       - ./plexe/ui/frontend/src:/app/src
       - ./plexe/ui/frontend/index.html:/app/index.html
@@ -61,7 +61,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       postgres:
         condition: service_started

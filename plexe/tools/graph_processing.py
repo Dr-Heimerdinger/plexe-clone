@@ -1254,6 +1254,10 @@ def create_id_mapping(
     Creates a safe mapping from original database IDs to contiguous indices.
     This function is kept for backwards compatibility but register_entities()
     provides better integration with the EntityMapper system.
+
+    Args:
+        original_ids: List of original IDs to map.
+        table_name: Name of the table these IDs belong to.
     """
     # Use the new EntityMapper system internally
     mapper = get_global_entity_mapper()

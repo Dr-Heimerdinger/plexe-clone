@@ -9,26 +9,8 @@ and involvement. This predictive task serves as a crucial tool in optimizing use
 engaged user base.
 Machine learning task: Binary classification. The label is 1 when a user contributes to the site and 0 otherwise.
 Evaluation metric: Average Precision (AP).
----------------------------------------------------------
-For the input schema:
-
-Represent each table as nodes in a heterogeneous graph
-Use primary-foreign key relationships to define edges between entities
-Apply temporal constraints where only entities with timestamps less or equal prediction time can influence the model
-For the users table, filter to 'active users' (those who made at least one contribution in the past 10 days before each timestamp)
-
-For the training table generation:
-
-Create timestamps by moving backwards from the validation cutoff in 2-day intervals
-For each timestamp t, label users as 1 if they made any contribution (vote or comment or post) between t and t+2 days, 0 otherwise, and a suitable (set of) foreign keys  indicating the entities the training example is associated to
-Ensure temporal consistency: the model should only see data with timestamps less or equal t when predicting for time t
-Here are some examples:
+Here are some examples for the training table:
 timestamp,OwnerUserId,contribution,
 2012-01-12,352,1
 2010-10-14,7,1
-
-For model solutions to try, I'd recommend 1-3 different approaches:
-
-GNN-based model: Graph Neural Network with heterogeneous temporal message passing
-GNN with different architectures: Vary the message passing layers (2-layer, 3-layer, 4-layer)
 please proceed.
