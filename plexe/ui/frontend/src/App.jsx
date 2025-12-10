@@ -11,6 +11,7 @@ export default function App() {
     const [messages, setMessages] = useState([])
     const [status, setStatus] = useState('disconnected')
     const [isProcessing, setIsProcessing] = useState(false)
+    const [confirmationRequest, setConfirmationRequest] = useState(null)
     const wsRef = useRef(null)
     const reconnectTimeoutRef = useRef(null)
     const pingIntervalRef = useRef(null)
@@ -91,6 +92,12 @@ export default function App() {
                     return
                 }
 
+                if (data.type === 'confirmation_request') {
+                    // Show confirmation dialog
+                    setConfirmationRequest(data)
+                    return
+                }
+
                 if (data.type === 'thinking' || data.role === 'thinking') {
                     // Thinking message - agent is still processing
                     setMessages((m) => [...m, data])
@@ -138,6 +145,29 @@ export default function App() {
         return true
     }, [isProcessing])
 
+    const sendConfirmationResponse = useCallback((requestId, confirmed) => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        // Send confirmation response
+        wsRef.current.send(JSON.stringify({
+            type: 'confirmation_response',
+            id: requestId,
+            confirmed: confirmed
+        }))
+
+        // Add a message showing the user's decision
+        setMessages((m) => [...m, {
+            role: 'user',
+            content: confirmed ? '✓ Confirmed' : '✗ Rejected'
+        }])
+
+        // Clear the confirmation request
+        setConfirmationRequest(null)
+    }, [])
+
     return (
         <div className="app-root">
             <Sidebar activePage={activePage} setActivePage={setActivePage} />
@@ -149,6 +179,8 @@ export default function App() {
                         status={status}
                         isProcessing={isProcessing}
                         onSendMessage={sendMessage}
+                        confirmationRequest={confirmationRequest}
+                        onConfirmationResponse={sendConfirmationResponse}
                     />
                 </div>
                 <div style={{ display: activePage === 'dataset' ? 'block' : 'none', height: '100%' }}>

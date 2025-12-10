@@ -220,6 +220,10 @@ def initiate_model_build(
 
         gemini_model = "gemini/gemini-2.5-flash"
 
+        # Create unique working directory for each run to prevent data loss
+        run_timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        working_dir = f"./workdir/chat-session-{run_timestamp}/"
+
         model_builder = ModelBuilder(
             provider=ProviderConfig(
                 default_provider=gemini_model,
@@ -229,11 +233,12 @@ def initiate_model_build(
                 ops_provider=gemini_model,
                 tool_provider=gemini_model,
             ),
-            working_dir="./workdir/chat-session/",
+            working_dir=working_dir,
         )
 
         # Start the build process
         logger.info(f"Initiating model build with intent: {intent}")
+        logger.info(f"Working directory: {working_dir}")
         if dataset_file_paths:
             logger.info(f"Using dataset files: {dataset_file_paths}")
         if db_connection_string:

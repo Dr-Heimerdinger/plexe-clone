@@ -126,6 +126,30 @@ async def websocket_endpoint(websocket: WebSocket):
         if l.level == logging.NOTSET:
             l.setLevel(logging.INFO)
 
+    # Track if agent is currently running
+    agent_task = None
+
+    async def run_agent_task(user_message: str):
+        """Run agent in executor and handle response."""
+        nonlocal agent_task
+        token = set_chain_of_thought_callable(chain_of_thought)
+        try:
+            ctx = contextvars.copy_context()
+            func = functools.partial(ctx.run, agent.agent.run, user_message, reset=False)
+            response = await loop.run_in_executor(None, func)
+            await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
+        except Exception as e:
+            logger.error(f"Agent error: {e}")
+            await websocket.send_json({
+                "role": "assistant",
+                "content": f"I encountered an error: {str(e)}. Please try again.",
+                "id": str(uuid.uuid4()),
+                "error": True,
+            })
+        finally:
+            reset_chain_of_thought_callable(token)
+            agent_task = None
+
     try:
         while True:
             # Receive message from client
@@ -138,35 +162,38 @@ async def websocket_endpoint(websocket: WebSocket):
                 if message_data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
                     continue
+
+                # Handle confirmation response
+                if message_data.get("type") == "confirmation_response":
+                    request_id = message_data.get("id")
+                    confirmed = message_data.get("confirmed", False)
+                    logger.info(f"Received confirmation response: {request_id} = {confirmed}")
+                    ws_emitter.resolve_confirmation(request_id, confirmed)
+                    continue
                 
                 user_message = message_data.get("content", "")
+                if not user_message:
+                    continue
 
                 # Process the message with the agent
                 logger.debug(f"Processing message: {user_message[:100]}...")
                 
-                # Set the chain of thought context for this request
-                token = set_chain_of_thought_callable(chain_of_thought)
-                try:
-                    # Run blocking agent in a thread executor to avoid blocking the event loop
-                    # This ensures WebSocket messages (like thoughts) can be sent immediately
-                    ctx = contextvars.copy_context()
-                    func = functools.partial(ctx.run, agent.agent.run, user_message, reset=False)
-                    response = await loop.run_in_executor(None, func)
-                finally:
-                    reset_chain_of_thought_callable(token)
-
-                # Send response back to client
-                await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
+                # Start agent task in background so we can continue receiving messages
+                # This allows confirmation responses to be processed while agent is running
+                if agent_task is None:
+                    agent_task = asyncio.create_task(run_agent_task(user_message))
+                else:
+                    logger.warning("Agent is already processing a message, ignoring new message")
+                    await websocket.send_json({
+                        "role": "assistant",
+                        "content": "I'm still processing your previous request. Please wait.",
+                        "id": str(uuid.uuid4()),
+                    })
 
             except json.JSONDecodeError:
                 # Handle plain text messages for compatibility
-                token = set_chain_of_thought_callable(chain_of_thought)
-                try:
-                    response = agent.agent.run(data, reset=False)
-                finally:
-                    reset_chain_of_thought_callable(token)
-                
-                await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
+                if agent_task is None:
+                    agent_task = asyncio.create_task(run_agent_task(data))
 
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
@@ -184,8 +211,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {session_id}")
+        if agent_task:
+            agent_task.cancel()
     except Exception as e:
         logger.error(f"WebSocket error for session {session_id}: {e}")
+        if agent_task:
+            agent_task.cancel()
         try:
             await websocket.close()
         except Exception:

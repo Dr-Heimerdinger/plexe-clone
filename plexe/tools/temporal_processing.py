@@ -554,6 +554,65 @@ def validate_temporal_consistency(
 
 
 @tool
+def preview_sql_query(
+    db_connection_string: str,
+    query: str,
+    params: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Executes a SQL query with a LIMIT to preview results and verify column names.
+    Use this tool to debug your SQL queries BEFORE running the full dataset creation.
+    
+    Args:
+        db_connection_string: SQLAlchemy connection string
+        query: The SQL query to execute. You can use placeholders like {start_date} if you provide params, 
+               OR provide a raw query with hardcoded dates for testing.
+        params: Optional dictionary of parameters to format the query (e.g. {"start_date": "2023-01-01"})
+    
+    Returns:
+        Dictionary containing:
+        - success: Boolean
+        - columns: List of column names returned
+        - data: List of first 5 rows (as dicts)
+        - error: Error message if failed
+    """
+    try:
+        # Format query if params provided
+        if params:
+            try:
+                formatted_query = query.format(**params)
+            except KeyError as e:
+                return {
+                    "success": False, 
+                    "error": f"Missing parameter for placeholder: {e}. Provided params: {list(params.keys())}"
+                }
+        else:
+            formatted_query = query
+
+        # Add LIMIT if not present (simple check)
+        if "limit" not in formatted_query.lower():
+            formatted_query += " LIMIT 5"
+            
+        engine = create_engine(db_connection_string)
+        with engine.connect() as conn:
+            df = pd.read_sql(text(formatted_query), conn)
+            
+        return {
+            "success": True,
+            "columns": list(df.columns),
+            "data": df.head(5).to_dict(orient="records"),
+            "row_count": len(df)
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "columns": [],
+            "data": []
+        }
+
+
+@tool
 def create_temporal_dataset(
     db_connection_string: str,
     entity_table: str,
@@ -612,10 +671,27 @@ def create_temporal_dataset(
     object_registry = ObjectRegistry()
     warnings = []
 
-    # Default to cache dir if not provided to ensure persistence across agents
+    # Default to working_dir from registry, then cache dir
     if output_dir is None:
-        output_dir = config.file_storage.cache_dir
+        try:
+            output_dir = object_registry.get(str, "working_dir")
+            logger.info(f"Using working_dir from registry: {output_dir}")
+        except KeyError:
+            output_dir = config.file_storage.cache_dir
+            logger.info(f"No working_dir in registry, using cache_dir: {output_dir}")
     
+    # Save queries for debugging
+    if output_dir:
+        try:
+            debug_path = Path(output_dir)
+            debug_path.mkdir(parents=True, exist_ok=True)
+            with open(debug_path / "dataset_generation_queries.sql", "w") as f:
+                f.write(f"-- Label Query\n{label_query}\n\n")
+                f.write(f"-- Feature Query\n{feature_query}\n")
+            logger.info(f"Saved generation queries to {debug_path / 'dataset_generation_queries.sql'}")
+        except Exception as e:
+            logger.warning(f"Failed to save debug queries: {e}")
+
     try:
         engine = create_engine(db_connection_string)
         
@@ -714,12 +790,15 @@ def create_temporal_dataset(
                 # If names differ, keep the one matching entity_id_column or the first one
                 final_id_col = feat_id_col
             else:
-                # Fallback: concat (unsafe, may have misaligned rows)
-                logger.warning(f"Entity column '{entity_id_column}' not found in both dataframes (feat={feat_id_col}, lbl={lbl_id_col}). Using concat.")
-                df = pd.concat([features_df, labels_df], axis=1)
-                # Remove duplicate columns to prevent AttributeError: 'DataFrame' object has no attribute 'dtype'
-                df = df.loc[:, ~df.columns.duplicated()]
-                final_id_col = feat_id_col if feat_id_col else (lbl_id_col if lbl_id_col else df.columns[0])
+                # CRITICAL FIX: Do not use unsafe concat. Raise error if ID columns not found.
+                error_msg = (
+                    f"MERGE FAILED: Could not find entity ID column '{entity_id_column}' in both dataframes. "
+                    f"Features columns: {list(features_df.columns)}. "
+                    f"Labels columns: {list(labels_df.columns)}. "
+                    f"Please check your SQL queries to ensure they return the entity ID column named '{entity_id_column}' (or similar)."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             
             # Add metadata columns (important for Temporal GNN training)
             df["seed_time"] = seed_time

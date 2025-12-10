@@ -39,7 +39,74 @@ function ThinkingIndicator() {
     )
 }
 
-export default function Chat({ messages, status, isProcessing, onSendMessage }) {
+function ConfirmationDialog({ request, onConfirm, onReject }) {
+    const [isExpanded, setIsExpanded] = useState(false)
+
+    const renderContent = () => {
+        const { content, content_type } = request
+
+        // Truncate content if too long and not expanded
+        const maxPreviewLength = 500
+        const shouldTruncate = content.length > maxPreviewLength && !isExpanded
+        const displayContent = shouldTruncate
+            ? content.substring(0, maxPreviewLength) + '...'
+            : content
+
+        if (content_type === 'code') {
+            return (
+                <pre className="confirmation-code">
+                    <code>{displayContent}</code>
+                </pre>
+            )
+        } else if (content_type === 'json') {
+            try {
+                const parsed = JSON.parse(content)
+                return (
+                    <pre className="confirmation-json">
+                        {isExpanded ? JSON.stringify(parsed, null, 2) : JSON.stringify(parsed, null, 2).substring(0, maxPreviewLength) + (JSON.stringify(parsed, null, 2).length > maxPreviewLength ? '...' : '')}
+                    </pre>
+                )
+            } catch {
+                return <pre className="confirmation-text">{displayContent}</pre>
+            }
+        } else if (content_type === 'markdown') {
+            // Simple markdown rendering (just preserve formatting)
+            return <div className="confirmation-markdown"><pre>{displayContent}</pre></div>
+        }
+        return <div className="confirmation-text"><pre>{displayContent}</pre></div>
+    }
+
+    return (
+        <div className="confirmation-dialog-overlay">
+            <div className="confirmation-dialog">
+                <div className="confirmation-header">
+                    <h3>{request.title}</h3>
+                </div>
+                <div className="confirmation-body">
+                    {renderContent()}
+                    {request.content.length > 500 && (
+                        <button
+                            className="expand-toggle"
+                            onClick={() => setIsExpanded(!isExpanded)}
+                        >
+                            {isExpanded ? '▲ Thu gọn' : '▼ Xem thêm'}
+                        </button>
+                    )}
+                </div>
+                <div className="confirmation-footer">
+                    <button className="btn-reject" onClick={onReject}>
+                        ✗ Reject
+                    </button>
+                    <button className="btn-confirm" onClick={onConfirm}>
+                        ✓ Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default function Chat({ messages, status, isProcessing, onSendMessage, confirmationRequest, onConfirmationResponse }) {
     const [input, setInput] = useState('')
     const messagesEndRef = useRef(null)
 
@@ -69,6 +136,13 @@ export default function Chat({ messages, status, isProcessing, onSendMessage }) 
 
     return (
         <div className="chat-root">
+            {confirmationRequest && (
+                <ConfirmationDialog
+                    request={confirmationRequest}
+                    onConfirm={() => onConfirmationResponse(confirmationRequest.id, true)}
+                    onReject={() => onConfirmationResponse(confirmationRequest.id, false)}
+                />
+            )}
             <div className={`status ${getStatusClass()}`}>{getStatusText()}</div>
             <div className="messages">
                 {messages.map((m, i) => (

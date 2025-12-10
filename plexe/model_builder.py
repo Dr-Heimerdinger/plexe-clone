@@ -144,6 +144,10 @@ class ModelBuilder:
         object_registry.register_multiple(Callback, {f"{i}": c for i, c in enumerate(callbacks)})
 
         try:
+            # Register working directory for tools to access
+            object_registry.register(str, "working_dir", self.working_dir, overwrite=True)
+            logger.info(f"Registered working directory: {self.working_dir}")
+
             # Register datasets
             training_data = {}
             if datasets:

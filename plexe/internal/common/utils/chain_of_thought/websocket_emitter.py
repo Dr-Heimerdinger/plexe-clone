@@ -8,6 +8,7 @@ in real-time, allowing the UI to display the agent's reasoning process.
 import asyncio
 import logging
 import threading
+import uuid
 
 from plexe.internal.common.utils.chain_of_thought.emitters import ChainOfThoughtEmitter
 
@@ -35,10 +36,59 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
         self._message_queue = []
         self._loop = loop
         self._lock = threading.Lock()
+        self._pending_confirmations = {}
+        self._confirmation_results = {}
 
     def set_loop(self, loop):
         """Set the event loop to use for sending messages."""
         self._loop = loop
+
+    def request_confirmation(self, title: str, content: str, content_type: str = "text") -> bool:
+        """
+        Send a confirmation request to the UI and wait for response.
+        
+        Args:
+            title: Title of the confirmation dialog
+            content: Content to display
+            content_type: Type of content (text, code, json, markdown)
+            
+        Returns:
+            bool: True if confirmed, False otherwise
+        """
+        request_id = str(uuid.uuid4())
+        event = threading.Event()
+        
+        with self._lock:
+            self._pending_confirmations[request_id] = event
+            
+        payload = {
+            "type": "confirmation_request",
+            "id": request_id,
+            "title": title,
+            "content": content,
+            "content_type": content_type
+        }
+        
+        self._emit_payload(payload)
+        
+        logger.info(f"Waiting for confirmation {request_id}...")
+        event.wait()
+        
+        with self._lock:
+            result = self._confirmation_results.pop(request_id, False)
+            if request_id in self._pending_confirmations:
+                del self._pending_confirmations[request_id]
+            
+        return result
+
+    def resolve_confirmation(self, request_id: str, confirmed: bool):
+        """Resolve a pending confirmation request."""
+        with self._lock:
+            if request_id in self._pending_confirmations:
+                self._confirmation_results[request_id] = confirmed
+                self._pending_confirmations[request_id].set()
+            else:
+                logger.warning(f"Received confirmation for unknown request {request_id}")
 
     def emit_thought(self, agent_name: str, message: str) -> None:
         """
@@ -62,6 +112,14 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
                 "step_number": step_num,
             }
             
+            self._emit_payload(payload)
+                
+        except Exception as e:
+            logger.error(f"Error emitting thought to WebSocket: {e}")
+
+    def _emit_payload(self, payload: dict):
+        """Internal helper to send payload via WebSocket."""
+        try:
             # Try to send the message
             # First, check if we're in the same thread as the event loop
             try:
@@ -83,9 +141,9 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
                     # Last resort: queue the message
                     logger.warning("WebSocketEmitter: No event loop available - message queued")
                     self._message_queue.append(payload)
-                
         except Exception as e:
-            logger.error(f"Error emitting thought to WebSocket: {e}")
+            logger.error(f"Error emitting payload to WebSocket: {e}")
+
 
     def _handle_send_result(self, future):
         """Handle the result of a threadsafe coroutine call."""

@@ -7,6 +7,7 @@ communication and smart decision-making.
 **Input Schema:** {{input_schema}}
 **Output Schema:** {{output_schema}}
 **Available Datasets:** {{datasets|join(', ')}}
+**Working Directory:** `{{working_dir}}` (Use this path to save all output files!)
 
 ## 2. Your Strategy Framework
 
@@ -47,9 +48,79 @@ communication and smart decision-making.
 - **ModelTester**: Comprehensive evaluation (provide solution_id for testing)
 - **RelationalGraphArchitect**: Use when input is a Relational Database. Transforms tables into a Heterogeneous Graph. Always include the database connection string!
 - **TemporalTaskSupervisor**: Use for Relational Deep Learning tasks. Defines Training Tables and enforces temporal consistency. **ALWAYS include the database connection string in your task description!**
-- **RelationalGNNSpecialist**: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
+- RelationalGNNSpecialist: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
 
-## 4. Critical Decision Points
+## 4. User Interaction & Confirmation (CRITICAL)
+You MUST ask for user confirmation after key milestones using the `ask_user_confirmation` tool.
+This allows the user to review intermediate outputs and approve the next steps.
+
+**Mandatory Confirmation Points:**
+1.  **After Data Preparation**:
+    - If using `TemporalTaskSupervisor`: Confirm the created training table and temporal splits.
+    - If using `DatasetSplitter`: Confirm the train/val/test splits.
+    - Show summary statistics (row counts, date ranges).
+    - **IMPORTANT**: Show the FIRST 10 ROWS of each dataset (train, val, test) so user can verify data quality.
+    - Format the data samples in a readable table format.
+    - Save the summary to `{{ working_dir }}/data_prep_summary.txt`.
+
+2.  **After Graph Construction (RDL only)**:
+    - If using `RelationalGraphArchitect`: Confirm the graph structure (node types, edge types).
+    - Show the graph metadata (number of nodes per type, number of edges per type).
+    - Save the metadata to `{{ working_dir }}/graph_metadata.txt`.
+
+3.  **After Code Generation (Before Training)**:
+    - Confirm the generated training code.
+    - Show the FULL training code (not just a summary).
+    - Save the code to `{{ working_dir }}/training_code.py`.
+
+4.  **After Inference Code Generation**:
+    - Confirm the inference code.
+    - Show the FULL inference code.
+    - Save the code to `{{ working_dir }}/inference_code.py`.
+
+**How to use `ask_user_confirmation`:**
+- `title`: A short, descriptive title (e.g., "Confirm Training Data").
+- `content`: The detailed information you want the user to review. For datasets, include:
+  - Summary stats (total rows, columns, date ranges)
+  - First 10 rows of each split formatted as a table
+- `content_type`: "text", "code", "json", or "markdown".
+- `file_path`: The path to save the content (e.g., `{{ working_dir }}/data_prep_summary.txt`).
+
+**Example format for Data Preparation confirmation:**
+```
+=== Temporal Dataset Summary ===
+Train: 100 samples, from 2020-01-01 to 2020-06-01
+Val: 30 samples, at 2020-07-01  
+Test: 30 samples, at 2020-08-01
+
+=== Train Data (First 10 rows) ===
+entity_id | seed_time  | label
+----------|------------|------
+1         | 2020-01-01 | 1
+2         | 2020-01-01 | 0
+...
+
+=== Val Data (First 10 rows) ===
+...
+
+=== Test Data (First 10 rows) ===
+...
+```
+
+**If the user rejects (`Rejected`):**
+- Stop the current path.
+- Ask the relevant agent to fix the issue or try a different approach based on user feedback (if provided) or your own analysis.
+
+## 5. Saving Artifacts (IMPORTANT)
+Use the `save_to_workdir` tool to save all generated code and important outputs:
+- `save_to_workdir("training_code.py", code_content)` - Save training code
+- `save_to_workdir("inference_code.py", code_content)` - Save inference code  
+- `save_to_workdir("data_summary.txt", summary)` - Save data summaries
+- `save_to_workdir("model_plan.txt", plan)` - Save solution plans
+
+This ensures all artifacts are preserved for debugging and reproducibility.
+
+## 6. Critical Decision Points
 - **Relational Data**: If the input is a Relational Database (multiple tables with FKs), PREFER the RDL pipeline (Architect and Supervisor and GNN Specialist) over the standard tabular pipeline.
 - **Failed experiments**: Analyze why (data issues? approach mismatch? syntax errors? dependencies problems?) before trying alternatives
 - **Suspicious metrics**: Zero error often indicates bugs; extremely high variance suggests instability
@@ -57,7 +128,7 @@ communication and smart decision-making.
 - **Early stopping**: Stop if performance plateaus across diverse approaches
 
 {% if resume %}
-## 5. Resuming Work
+## 7. Resuming Work
 Previous work exists. Review prior results, identify improvement opportunities, and build upon successful elements.
 {% endif %}
 

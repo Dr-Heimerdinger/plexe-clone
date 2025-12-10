@@ -37,6 +37,7 @@ from plexe.tools.response_formatting import (
     format_final_orchestrator_agent_response,
 )
 from plexe.tools.training import register_best_solution
+from plexe.tools.interaction import ask_user_confirmation, save_to_workdir
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +224,8 @@ class PlexeAgent:
                 get_solution_performances,
                 register_best_solution,
                 format_final_orchestrator_agent_response,
+                ask_user_confirmation,
+                save_to_workdir,
             ],
             managed_agents=managed_agents,
             add_base_tools=False,
