@@ -75,6 +75,8 @@ class _Config:
                 "statsmodels",
                 "sqlalchemy",
                 "psycopg2",
+                "torch",
+                "torch_geometric",
             ]
         )
 
@@ -87,6 +89,7 @@ class _Config:
                 "tokenizers",
                 "accelerate",
                 "safetensors",
+                "torch_geometric",
             ]
         )
 
@@ -115,6 +118,7 @@ class _Config:
                 "importlib",
                 "types",
                 "plexe",
+                "ast",
             ]
         )
 
@@ -135,6 +139,9 @@ class _Config:
             """Return the combined list of allowed packages and standard library modules for agent execution."""
             # Start with allowed packages
             imports = self.allowed_packages.copy()
+
+            # Add wildcard imports for all allowed packages
+            imports.extend([f"{pkg}.*" for pkg in self.allowed_packages])
 
             # Add standard library modules
             imports.extend(self._standard_lib_modules)

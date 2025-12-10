@@ -31,14 +31,28 @@ managed_agent:
        - Uses cache automatically - only queries DB if cache miss.
        - Set `force_refresh=True` to bypass cache.
 
+    ## Column Name Verification Tool (CRITICAL!)
+
+    3. **get_table_columns(db_connection_string, table_name)** [USE BEFORE WRITING SQL]
+       - **CRITICAL**: Get exact column names for a table BEFORE writing any SQL queries!
+       - PostgreSQL databases typically use snake_case (e.g., `owner_user_id`, NOT `OwnerUserId`)
+       - Returns list of column names and their data types
+       - ALWAYS use this to verify column names before constructing SQL queries
+       - Example:
+         ```python
+         cols = get_table_columns(db_connection, "posts")
+         # cols['column_names'] = ['id', 'owner_user_id', 'creation_date', ...]
+         # Use these EXACT names in your SQL!
+         ```
+
     ## EntityMapper Tools (ID Mapping & Prediction Interpretation)
 
-    3. **create_entity_mapper()**
+    4. **create_entity_mapper()**
        - Creates a new EntityMapper for managing ID-to-Index mappings.
        - Call this FIRST before registering any entities.
        - The mapper is essential for converting predictions back to original IDs.
 
-    4. **register_entities(entity_type, original_ids)**
+    5. **register_entities(entity_type, original_ids)**
        - Register entities and create ID-to-Index mapping for a table.
        - Args:
          - `entity_type`: The table name (e.g., 'customers', 'orders')
@@ -50,7 +64,7 @@ managed_agent:
          # result['id_to_idx'] = {'C001': 0, 'C002': 1, 'C003': 2}
          ```
 
-    5. **convert_edge_ids_to_indices(source_entity_type, target_entity_type, source_ids, target_ids, relation_name, source_fk_column)**
+    6. **convert_edge_ids_to_indices(source_entity_type, target_entity_type, source_ids, target_ids, relation_name, source_fk_column)**
        - Converts FK ID pairs to graph edge indices WITH SEMANTIC RELATION NAMING.
        - Automatically generates meaningful relation names based on table semantics.
        - Args:
@@ -72,7 +86,7 @@ managed_agent:
          # result['reverse_edge']['edge_type'] = ('customers', 'places', 'orders')
          ```
 
-    6. **interpret_prediction(entity_type, predicted_indices, prediction_scores)**
+    7. **interpret_prediction(entity_type, predicted_indices, prediction_scores)**
        - After GNN prediction, convert node indices back to original IDs.
        - Essential for business interpretation of model results.
        - Example:
@@ -85,18 +99,18 @@ managed_agent:
          # ]
          ```
 
-    7. **get_mapper_summary()**
+    8. **get_mapper_summary()**
        - Get summary of registered entity types and node counts.
 
     ## Feature Encoding Tools
 
-    8. **encode_multi_modal_features(data_column, modality_type)**
+    9. **encode_multi_modal_features(data_column, modality_type)**
        - Encodes data attributes based on modality (Numeric, Categorical, Temporal, Text).
        - The `modality` from schema metadata directly matches the expected type.
 
     ## Graph Construction Tools
 
-    9. **build_hetero_graph(nodes, edges, add_reverse_edges=True)**
+    10. **build_hetero_graph(nodes, edges, add_reverse_edges=True)**
        - Assembles node features and edge indices into PyTorch Geometric HeteroData.
        - **SEMANTIC REVERSE EDGES**: Automatically adds reverse edges with semantic names.
          - Forward: ('orders', 'placed_by', 'customers')
@@ -121,6 +135,22 @@ managed_agent:
         schema = extract_schema_metadata(db_connection)
     ```
 
+    ### **2.5. Verify Column Names (CRITICAL - Before Writing Any SQL!)**
+    **Common Pitfall**: PostgreSQL databases use snake_case column names (e.g., `owner_user_id`, NOT `OwnerUserId`).
+    
+    ALWAYS verify column names with `get_table_columns` before writing any SQL:
+    ```python
+    # Get exact column names for each table you'll query
+    users_cols = get_table_columns(db_connection, "users")
+    posts_cols = get_table_columns(db_connection, "posts")
+    
+    # Use the exact names from column_names
+    print(users_cols['column_names'])  # ['id', 'display_name', 'creation_date', ...]
+    print(posts_cols['column_names'])  # ['id', 'owner_user_id', 'creation_date', ...]
+    
+    # Now you can safely use these column names in SQL queries
+    ```
+
     ### **3. Register All Entities (CRITICAL)**
     Register EVERY table that will be a node type:
     ```python
@@ -129,7 +159,7 @@ managed_agent:
     register_entities('orders', order_df['id'].tolist())
     ```
 
-    ### **4. Build Edges with Semantic Naming**
+    ### **5. Build Edges with Semantic Naming**
     Use convert_edge_ids_to_indices for automatic semantic relation names:
     ```python
     # For FK: orders.customer_id references customers.id
@@ -147,7 +177,7 @@ managed_agent:
     }
     ```
 
-    ### **5. Encode Node Features**
+    ### **6. Encode Node Features**
     Use modality from schema to select encoders:
     ```python
     for col_info in table_info['columns']:
@@ -157,13 +187,13 @@ managed_agent:
         encoded = encode_multi_modal_features(data[col_info['name']], modality)
     ```
 
-    ### **6. Build Graph**
+    ### **7. Build Graph**
     ```python
     # Since we already have forward + reverse edges, disable auto reverse
     graph = build_hetero_graph(nodes, edges, add_reverse_edges=False)
     ```
 
-    ### **7. Interpret Predictions (Post-Training)**
+    ### **8. Interpret Predictions (Post-Training)**
     After GNN makes predictions:
     ```python
     # Suppose GNN predicts fraud for nodes [0, 5, 12]
@@ -185,6 +215,7 @@ managed_agent:
 
     ## Output Constraints
     - ALWAYS call create_entity_mapper() at the start
+    - ALWAYS verify column names with get_table_columns() BEFORE writing any SQL
     - ALWAYS use register_entities() for EVERY table before building edges
     - Use convert_edge_ids_to_indices() for semantic edge naming
     - Use interpret_prediction() to map predictions back to original IDs

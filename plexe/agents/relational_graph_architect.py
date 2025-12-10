@@ -23,6 +23,8 @@ from plexe.tools.graph_processing import (
     convert_edge_ids_to_indices,
     interpret_prediction,
     get_mapper_summary,
+    # Schema verification tool - critical for correct column names
+    get_table_columns,
     # Deprecated but kept for compatibility
     create_id_mapping,
 )
@@ -56,7 +58,9 @@ class RelationalGraphArchitectAgent:
             name="RelationalGraphArchitect",
             description=(
                 "Expert in Graph Representation Learning and Heterogeneous Graph Construction. "
-                "Transforms multi-table relational databases into Heterogeneous Graphs for GNNs."
+                "Transforms multi-table relational databases into Heterogeneous Graphs for GNNs. "
+                "IMPORTANT: The database columns use snake_case naming convention (e.g., owner_user_id instead of OwnerUserId). "
+                "Always check the actual column names from the schema before generating SQL."
             ),
             model=LiteLLMModel(model_id=self.model_id),
             tools=[
@@ -64,6 +68,8 @@ class RelationalGraphArchitectAgent:
                 extract_schema_metadata,
                 get_cached_schema,
                 load_table_data,
+                # Column name verification - USE BEFORE WRITING SQL!
+                get_table_columns,
                 # EntityMapper tools (for ID mapping and prediction interpretation)
                 create_entity_mapper,
                 register_entities,

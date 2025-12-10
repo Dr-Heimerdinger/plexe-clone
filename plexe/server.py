@@ -170,20 +170,26 @@ async def websocket_endpoint(websocket: WebSocket):
 
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
-                await websocket.send_json(
-                    {
-                        "role": "assistant",
-                        "content": f"I encountered an error: {str(e)}. Please try again.",
-                        "id": str(uuid.uuid4()),
-                        "error": True,
-                    }
-                )
+                try:
+                    await websocket.send_json(
+                        {
+                            "role": "assistant",
+                            "content": f"I encountered an error: {str(e)}. Please try again.",
+                            "id": str(uuid.uuid4()),
+                            "error": True,
+                        }
+                    )
+                except Exception as send_error:
+                    logger.warning(f"Could not send error message to client: {send_error}")
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {session_id}")
     except Exception as e:
         logger.error(f"WebSocket error for session {session_id}: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass # Connection might be already closed
     finally:
         # Remove log handler
         for logger_name in loggers_to_capture:

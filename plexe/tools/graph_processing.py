@@ -18,6 +18,10 @@ from torch_geometric.data import HeteroData
 # ObjectRegistry for sharing data between agents
 from plexe.core.object_registry import ObjectRegistry
 
+# Import get_table_columns from temporal_processing for schema verification
+# This tool is critical for ensuring agents use correct column names from database
+from plexe.tools.temporal_processing import get_table_columns
+
 logger = logging.getLogger(__name__)
 
 
@@ -688,8 +692,18 @@ def load_table_data(
         
     except Exception as e:
         import traceback
+        error_msg = str(e)
+        
+        # Check for common column name errors and provide helpful hints
+        hint = ""
+        if "column" in error_msg.lower() and ("does not exist" in error_msg.lower() or "not found" in error_msg.lower() or "unknown" in error_msg.lower()):
+            hint = (
+                " HINT: Column name error! Use get_table_columns(db_connection, table_name) "
+                "to verify exact column names. PostgreSQL uses snake_case (e.g., 'owner_user_id', NOT 'OwnerUserId')."
+            )
+        
         return {
-            "error": f"Failed to load table data: {str(e)}",
+            "error": f"Failed to load table data: {error_msg}{hint}",
             "traceback": traceback.format_exc()
         }
 
@@ -1094,8 +1108,10 @@ def convert_edge_ids_to_indices(
     Args:
         source_entity_type: Source table name (e.g., 'orders')
         target_entity_type: Target table name (e.g., 'customers')
-        source_ids: List of source entity IDs (from FK column values)
-        target_ids: List of target entity IDs (the referenced PKs)
+        source_ids: List of IDs for the source entities. 
+                    If source is 'orders', this should be the list of order IDs (PKs).
+        target_ids: List of IDs for the target entities.
+                    If source is 'orders' and target is 'customers', this should be the list of customer IDs (FK values) associated with each order.
         relation_name: Optional custom relation name. If None, auto-generated.
         source_fk_column: FK column name for semantic naming (e.g., 'customer_id')
         
@@ -1107,10 +1123,11 @@ def convert_edge_ids_to_indices(
         - 'dropped_edges': Number of edges with unmapped IDs (dropped)
         
     Example:
+        >>> # Creating edges from orders to customers
         >>> result = convert_edge_ids_to_indices(
         ...     'orders', 'customers',
-        ...     order_df['customer_id'].tolist(),  # FK values
-        ...     order_df['customer_id'].tolist(),  # Same for simple FK
+        ...     order_df['order_id'].tolist(),      # Source IDs (PK of orders)
+        ...     order_df['customer_id'].tolist(),   # Target IDs (FK to customers)
         ...     source_fk_column='customer_id'
         ... )
         >>> result['forward_edge']
@@ -1134,8 +1151,17 @@ def convert_edge_ids_to_indices(
     dropped = 0
     
     for src_id, tgt_id in zip(source_ids, target_ids):
+        # Try direct lookup
         src_idx = src_mapping.get(src_id)
+        # Handle float/int mismatch (e.g. 1.0 vs 1)
+        if src_idx is None and isinstance(src_id, float) and src_id.is_integer():
+            src_idx = src_mapping.get(int(src_id))
+            
+        # Try direct lookup
         tgt_idx = tgt_mapping.get(tgt_id)
+        # Handle float/int mismatch
+        if tgt_idx is None and isinstance(tgt_id, float) and tgt_id.is_integer():
+            tgt_idx = tgt_mapping.get(int(tgt_id))
         
         if src_idx is not None and tgt_idx is not None:
             src_indices.append(src_idx)

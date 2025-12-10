@@ -90,20 +90,21 @@ class PlexeAgent:
             max_steps: Maximum number of steps for the orchestrator agent
             distributed: Whether to run the agents in a distributed environment
             chain_of_thought_callable: Optional callable for chain of thought logging
+            max_solutions: Maximum number of solutions to generate
         """
         self.orchestrator_model_id = orchestrator_model_id or os.environ.get(
-            "PLEXE_ORCHESTRATOR_MODEL", "gemini/gemini-2.5-pro"
+            "PLEXE_ORCHESTRATOR_MODEL", "gemini/gemini-2.5-flash"
         )
         self.ml_researcher_model_id = ml_researcher_model_id or os.environ.get(
-            "PLEXE_ML_RESEARCHER_MODEL", "gemini/gemini-2.5-pro"
+            "PLEXE_ML_RESEARCHER_MODEL", "gemini/gemini-2.5-flash"
         )
         self.ml_engineer_model_id = ml_engineer_model_id or os.environ.get(
-            "PLEXE_ML_ENGINEER_MODEL", "gemini/gemini-2.5-pro"
+            "PLEXE_ML_ENGINEER_MODEL", "gemini/gemini-2.5-flash"
         )
         self.ml_ops_engineer_model_id = ml_ops_engineer_model_id or os.environ.get(
-            "PLEXE_ML_OPS_ENGINEER_MODEL", "gemini/gemini-2.5-pro"
+            "PLEXE_ML_OPS_ENGINEER_MODEL", "gemini/gemini-2.5-flash"
         )
-        self.tool_model_id = tool_model_id or os.environ.get("PLEXE_TOOL_MODEL", "gemini/gemini-2.5-pro")
+        self.tool_model_id = tool_model_id or os.environ.get("PLEXE_TOOL_MODEL", "gemini/gemini-2.5-flash")
         self.verbose = verbose
         self.max_steps = max_steps
         self.distributed = distributed
@@ -196,6 +197,21 @@ class PlexeAgent:
             chain_of_thought_callable=self.chain_of_thought_callable,
         ).agent
 
+        # Define managed agents
+        managed_agents = [
+            self.eda_agent,
+            self.schema_resolver_agent,
+            self.feature_engineering_agent,
+            self.ml_research_agent,
+            self.dataset_splitter_agent,
+            self.mle_agent,
+            self.mlops_engineer,
+            self.model_tester_agent,
+            self.relational_graph_architect_agent,
+            self.temporal_task_supervisor_agent,
+            self.relational_gnn_specialist_agent,
+        ]
+
         # Create orchestrator agent - coordinates the workflow
         self.manager_agent = CodeAgent(
             name="Orchestrator",
@@ -208,19 +224,7 @@ class PlexeAgent:
                 register_best_solution,
                 format_final_orchestrator_agent_response,
             ],
-            managed_agents=[
-                self.eda_agent,
-                self.schema_resolver_agent,
-                self.feature_engineering_agent,
-                self.ml_research_agent,
-                self.dataset_splitter_agent,
-                self.mle_agent,
-                self.mlops_engineer,
-                self.model_tester_agent,
-                self.relational_graph_architect_agent,
-                self.temporal_task_supervisor_agent,
-                self.relational_gnn_specialist_agent,
-            ],
+            managed_agents=managed_agents,
             add_base_tools=False,
             verbosity_level=self.orchestrator_verbosity,
             additional_authorized_imports=config.code_generation.authorized_agent_imports,
@@ -261,9 +265,22 @@ class PlexeAgent:
                     }
 
             # Extract data from the agent result
-            best_solution = object_registry.get(Solution, "best_performing_solution")
-            training_code = best_solution.training_code
-            inference_code = best_solution.inference_code
+            try:
+                best_solution = object_registry.get(Solution, "best_performing_solution")
+                training_code = best_solution.training_code
+                inference_code = best_solution.inference_code
+            except KeyError:
+                logger.warning("No best solution found in registry. Returning partial result.")
+                return ModelGenerationResult(
+                    training_source_code="",
+                    inference_source_code="",
+                    feature_transformer_source_code="",
+                    dataset_split_code="",
+                    predictor=None,
+                    model_artifacts=[],
+                    performance=Metric(name="unknown", value=0.0, comparator=MetricComparator(ComparisonMethod.HIGHER_IS_BETTER)),
+                    metadata={"status": "failed", "reason": "No solution found"},
+                )
 
             # Extract performance metrics
             if "performance" in result and isinstance(result["performance"], dict):

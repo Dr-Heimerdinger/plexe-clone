@@ -292,24 +292,38 @@ def create_input_sample(n_samples: int = 5) -> bool:
 
 
 @tool
-def drop_null_columns(dataset_name: str) -> str:
+def drop_null_columns(dataset_name: str, keep_columns: List[str] = None) -> Dict[str, Any]:
     """
     Drop all columns from the dataset that are completely null and register the modified dataset.
+    
+    This tool automatically protects common label column names (label, target, y, class) 
+    from being dropped, even if they appear to be null or constant.
 
     Args:
         dataset_name: Name of the dataset to modify
+        keep_columns: Optional list of column names to strictly preserve regardless of their quality.
 
     Returns:
         Dictionary containing results of the operation:
         - dataset_name: Name of the modified dataset
         - n_dropped: Number of columns dropped
+        - dropped_columns: List of names of dropped columns
     """
     object_registry = ObjectRegistry()
+    
+    # Protected columns that should NEVER be dropped automatically
+    PROTECTED_COLUMNS = {'label', 'target', 'y', 'class', 'id', 'user_id', 'item_id'}
 
     try:
         # Get dataset from registry
         dataset = object_registry.get(TabularConvertible, dataset_name)
         df = dataset.to_pandas()
+        
+        # Normalize protected columns
+        if keep_columns:
+            protected = set(c.lower() for c in keep_columns) | PROTECTED_COLUMNS
+        else:
+            protected = PROTECTED_COLUMNS
 
         # Drop columns with all null values TODO: make this more intelligent
         # Drop columns with >=50% missing values
@@ -323,7 +337,8 @@ def drop_null_columns(dataset_name: str) -> str:
             col for col in df.columns if (df[col].value_counts(dropna=False, normalize=True).values[0] > 0.95)
         ]
 
-        # Drop columns with all unique values (likely IDs)
+        # Drop columns with all unique values (likely IDs) - BUT keep if it looks like a primary ID
+        # We'll rely on PROTECTED_COLUMNS for IDs
         unique_columns = [col for col in df.columns if df[col].nunique(dropna=False) == len(df)]
 
         # Drop duplicate columns
@@ -338,15 +353,39 @@ def drop_null_columns(dataset_name: str) -> str:
                 seen[key] = col
 
         # Combine all columns to drop (set to avoid duplicates)
-        all_bad_columns = (
+        candidates_to_drop = (
             set(null_columns)
             | set(constant_columns)
             | set(quasi_constant_columns)
             | set(unique_columns)
             | set(duplicate_columns)
         )
-        n_dropped = len(all_bad_columns)
-        df.drop(columns=list(all_bad_columns), inplace=True)
+        
+        # Filter out protected columns
+        final_drop_list = []
+        for col in candidates_to_drop:
+            if col.lower() not in protected:
+                final_drop_list.append(col)
+            else:
+                logger.info(f"Protected column '{col}' from being dropped despite meeting drop criteria.")
+        
+        n_dropped = len(final_drop_list)
+        if n_dropped > 0:
+            df.drop(columns=final_drop_list, inplace=True)
+            
+            # Update registry
+            new_dataset = DatasetAdapter.coerce(df)
+            object_registry.register(TabularConvertible, dataset_name, new_dataset, overwrite=True)
+            
+        return {
+            "dataset_name": dataset_name,
+            "n_dropped": n_dropped,
+            "dropped_columns": final_drop_list
+        }
+
+    except Exception as e:
+        logger.error(f"Error dropping null columns: {e}")
+        return {"error": str(e)}
 
         # Unregister the original dataset
         object_registry.delete(TabularConvertible, dataset_name)
@@ -360,13 +399,140 @@ def drop_null_columns(dataset_name: str) -> str:
         raise RuntimeError(f"Failed to drop null columns from dataset '{dataset_name}': {str(e)}")
 
 
+def _generate_preview_from_dataframe(dataset_name: str, df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Generate a preview dictionary from a pandas DataFrame.
+    
+    Args:
+        dataset_name: Name to use for the dataset
+        df: The DataFrame to generate preview from
+        
+    Returns:
+        Dictionary containing dataset preview information
+    """
+    # Basic shape and data types
+    result = {
+        "dataset_name": dataset_name,
+        "shape": {"rows": df.shape[0], "columns": df.shape[1]},
+        "columns": list(df.columns),
+        "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
+        "sample_rows": df.head(5).to_dict(orient="records"),
+    }
+
+    # Basic statistics
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+    if numeric_cols:
+        stats = df[numeric_cols].describe().to_dict()
+        result["summary_stats"] = {
+            col: {
+                "mean": stats[col].get("mean"),
+                "std": stats[col].get("std"),
+                "min": stats[col].get("min"),
+                "25%": stats[col].get("25%"),
+                "median": stats[col].get("50%"),
+                "75%": stats[col].get("75%"),
+                "max": stats[col].get("max"),
+            }
+            for col in numeric_cols
+        }
+
+    # Missing values
+    missing_counts = df.isnull().sum().to_dict()
+    result["missing_values"] = {col: count for col, count in missing_counts.items() if count > 0}
+
+    return result
+
+
+# Key for unified schema cache (shared with graph_processing.py)
+UNIFIED_SCHEMA_CACHE_KEY = "unified_db_schema"
+
+
+def _get_db_connection_string(object_registry: ObjectRegistry) -> str:
+    """
+    Get the database connection string from the object registry.
+    
+    Checks multiple sources in order:
+    1. Direct db_connection_string registration
+    2. Unified schema cache (_connection_string field)
+    
+    Returns:
+        Database connection string if found, None otherwise
+    """
+    # First try direct registration
+    try:
+        db_connection = object_registry.get(str, "db_connection_string")
+        if db_connection:
+            return db_connection
+    except KeyError:
+        pass
+    
+    # Try unified schema cache
+    try:
+        unified = object_registry.get(dict, UNIFIED_SCHEMA_CACHE_KEY)
+        if unified and "_connection_string" in unified:
+            return unified["_connection_string"]
+    except KeyError:
+        pass
+    
+    return None
+
+
+def try_load_from_database(dataset_name: str, object_registry: ObjectRegistry, limit: int = 1000) -> pd.DataFrame:
+    """
+    Try to load a table from the database if a connection string is available.
+    
+    Args:
+        dataset_name: Name of the table to load
+        object_registry: The object registry instance
+        limit: Maximum number of rows to load (default 1000). Set to None for all rows.
+        
+    Returns:
+        DataFrame if successful, None otherwise
+    """
+    try:
+        db_connection = _get_db_connection_string(object_registry)
+        if not db_connection:
+            return None
+            
+        from sqlalchemy import create_engine, text
+        
+        engine = create_engine(db_connection)
+        
+        # Query a sample of the table (limit for preview performance)
+        # First get total row count
+        with engine.connect() as conn:
+            count_result = conn.execute(text(f'SELECT COUNT(*) FROM "{dataset_name}"')).fetchone()
+            total_rows = count_result[0] if count_result else 0
+            
+            # Load sample for preview
+            query = f'SELECT * FROM "{dataset_name}"'
+            if limit is not None:
+                query += f' LIMIT {limit}'
+                
+            df = pd.read_sql(text(query), conn)
+            
+            # Store total row count as metadata
+            df.attrs['total_rows'] = total_rows
+            
+        logger.info(f"Loaded table '{dataset_name}' from database ({len(df)} rows, {total_rows} total)")
+        return df
+        
+    except Exception as e:
+        logger.debug(f"Could not load table '{dataset_name}' from database: {e}")
+        return None
+
+
 @tool
 def get_dataset_preview(dataset_name: str) -> Dict[str, Any]:
     """
     Generate a concise preview of a dataset with statistical information to help agents understand the data.
+    
+    This tool supports both:
+    1. Datasets registered in the object registry (TabularConvertible)
+    2. Database tables when a db_connection_string is available
 
     Args:
-        dataset_name: Name of the dataset to preview
+        dataset_name: Name of the dataset or database table to preview
 
     Returns:
         Dictionary containing dataset information:
@@ -375,45 +541,55 @@ def get_dataset_preview(dataset_name: str) -> Dict[str, Any]:
         - summary_stats: basic statistics (mean, median, min/max)
         - missing_values: count of missing values per column
         - sample_rows: sample of the data (5 rows)
+        - source: 'registry' or 'database' indicating where data was loaded from
     """
     object_registry = ObjectRegistry()
 
     try:
-        # Get dataset from registry
+        # First try to get dataset from registry
         dataset = object_registry.get(TabularConvertible, dataset_name)
         df = dataset.to_pandas()
-
-        # Basic shape and data types
-        result = {
-            "dataset_name": dataset_name,
-            "shape": {"rows": df.shape[0], "columns": df.shape[1]},
-            "columns": list(df.columns),
-            "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-            "sample_rows": df.head(5).to_dict(orient="records"),
-        }
-
-        # Basic statistics
-        numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-        if numeric_cols:
-            stats = df[numeric_cols].describe().to_dict()
-            result["summary_stats"] = {
-                col: {
-                    "mean": stats[col].get("mean"),
-                    "std": stats[col].get("std"),
-                    "min": stats[col].get("min"),
-                    "25%": stats[col].get("25%"),
-                    "median": stats[col].get("50%"),
-                    "75%": stats[col].get("75%"),
-                    "max": stats[col].get("max"),
-                }
-                for col in numeric_cols
-            }
-
-        # Missing values
-        missing_counts = df.isnull().sum().to_dict()
-        result["missing_values"] = {col: count for col, count in missing_counts.items() if count > 0}
-
+        result = _generate_preview_from_dataframe(dataset_name, df)
+        result["source"] = "registry"
         return result
+
+    except KeyError:
+        # Dataset not in registry - try loading from database
+        logger.debug(f"Dataset '{dataset_name}' not in registry, trying database...")
+        df = try_load_from_database(dataset_name, object_registry, limit=1000)
+        
+        if df is not None:
+            result = _generate_preview_from_dataframe(dataset_name, df)
+            result["source"] = "database"
+            
+            # If we got total row count metadata, update the shape
+            if hasattr(df, 'attrs') and 'total_rows' in df.attrs:
+                result["shape"]["total_rows"] = df.attrs['total_rows']
+                result["shape"]["rows"] = df.attrs['total_rows']  # Use actual total
+                result["shape"]["sample_rows"] = len(df)
+                
+            # Also register the dataset in the registry for future use
+            try:
+                object_registry.register(
+                    TabularConvertible, 
+                    dataset_name, 
+                    DatasetAdapter.coerce(df), 
+                    overwrite=True, 
+                    immutable=True
+                )
+                logger.info(f"Registered database table '{dataset_name}' as TabularConvertible for future access")
+            except Exception as reg_error:
+                logger.debug(f"Could not register table in registry: {reg_error}")
+                
+            return result
+        else:
+            # Neither in registry nor loadable from database
+            logger.warning(f"⚠️ Dataset '{dataset_name}' not found in registry or database")
+            return {
+                "error": f"Dataset '{dataset_name}' not found. It is neither registered in the object registry nor available as a database table.",
+                "dataset_name": dataset_name,
+                "hint": "Use get_latest_datasets() to see available registered datasets, or check that the database connection is configured and the table name is correct."
+            }
 
     except Exception as e:
         logger.warning(f"⚠️ Error creating dataset preview: {str(e)}")
@@ -531,58 +707,80 @@ def register_feature_engineering_report(
 
 
 @tool
-def get_latest_datasets() -> Dict[str, str]:
+def get_latest_datasets() -> Dict[str, Any]:
     """
     Get the most recent version of each dataset in the pipeline. Automatically detects transformed
     versions and returns the latest. Use this tool to recall what datasets are available.
+    
+    This tool supports both:
+    1. Datasets registered in the object registry (TabularConvertible)
+    2. Database tables when a db_connection_string is available
 
     Returns:
-        Dictionary mapping dataset roles to actual dataset names:
-        - "raw": The original dataset
+        Dictionary containing:
+        - "raw": The original dataset (if available)
         - "transformed": The transformed dataset (if available)
         - "train": Training split (transformed version if available)
         - "val": Validation split (transformed version if available)
         - "test": Test split (transformed version if available)
+        - "database_tables": List of available database tables (if db connection exists)
     """
     object_registry = ObjectRegistry()
 
     try:
-        all_datasets = object_registry.list_by_type(TabularConvertible)
-        if not all_datasets:
-            return {}
-
         result = {}
+        
+        # Get datasets from registry
+        all_datasets = object_registry.list_by_type(TabularConvertible)
+        
+        if all_datasets:
+            # Find raw datasets (no suffixes)
+            raw_datasets = [
+                d for d in all_datasets if not any(suffix in d for suffix in ["_train", "_val", "_test", "_transformed"])
+            ]
+            if raw_datasets:
+                # Use the first one (could be enhanced to handle multiple)
+                result["raw"] = raw_datasets[0]
 
-        # Find raw datasets (no suffixes)
-        raw_datasets = [
-            d for d in all_datasets if not any(suffix in d for suffix in ["_train", "_val", "_test", "_transformed"])
-        ]
-        if raw_datasets:
-            # Use the first one (could be enhanced to handle multiple)
-            result["raw"] = raw_datasets[0]
+            # Find transformed dataset (not a split)
+            transformed = [
+                d
+                for d in all_datasets
+                if d.endswith("_transformed")
+                and not any(d.endswith(f"_transformed_{split}") for split in ["train", "val", "test"])
+            ]
+            if transformed:
+                result["transformed"] = transformed[0]
 
-        # Find transformed dataset (not a split)
-        transformed = [
-            d
-            for d in all_datasets
-            if d.endswith("_transformed")
-            and not any(d.endswith(f"_transformed_{split}") for split in ["train", "val", "test"])
-        ]
-        if transformed:
-            result["transformed"] = transformed[0]
+            # Find splits - prefer transformed versions
+            for split in ["train", "val", "test"]:
+                # First look for transformed split
+                transformed_split = [d for d in all_datasets if d.endswith(f"_transformed_{split}")]
+                if transformed_split:
+                    result[split] = transformed_split[0]
+                    continue
 
-        # Find splits - prefer transformed versions
-        for split in ["train", "val", "test"]:
-            # First look for transformed split
-            transformed_split = [d for d in all_datasets if d.endswith(f"_transformed_{split}")]
-            if transformed_split:
-                result[split] = transformed_split[0]
-                continue
-
-            # Fall back to regular split
-            regular_split = [d for d in all_datasets if d.endswith(f"_{split}") and "_transformed_" not in d]
-            if regular_split:
-                result[split] = regular_split[0]
+                # Fall back to regular split
+                regular_split = [d for d in all_datasets if d.endswith(f"_{split}") and "_transformed_" not in d]
+                if regular_split:
+                    result[split] = regular_split[0]
+        
+        # Check for database tables
+        db_connection = _get_db_connection_string(object_registry)
+        if db_connection:
+            try:
+                from sqlalchemy import create_engine, inspect
+                
+                engine = create_engine(db_connection)
+                inspector = inspect(engine)
+                table_names = inspector.get_table_names()
+                
+                if table_names:
+                    result["database_tables"] = table_names
+                    result["source"] = "database"
+                    logger.debug(f"Found {len(table_names)} database tables: {table_names}")
+            except Exception as e:
+                logger.debug(f"Could not list database tables: {e}")
 
         return result
 

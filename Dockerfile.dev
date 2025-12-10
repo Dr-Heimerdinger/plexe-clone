@@ -33,9 +33,11 @@ RUN poetry config virtualenvs.create false && \
     (echo "First attempt failed, retrying..." && sleep 10 && poetry install --no-interaction --no-ansi --no-root --only main --extras chatui) || \
     (echo "Second attempt failed, retrying with timeout increase..." && sleep 15 && poetry install --no-interaction --no-ansi --no-root --only main --extras chatui)
 
+# Force install torch CPU version to ensure compatibility with PyG dependencies
+RUN pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+
 # Install PyG dependencies (pyg_lib, etc.) for GNN support
-# Assuming torch 2.3.0+cpu is installed by poetry
-RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.0+cpu.html
+RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.1+cpu.html
 
 
 # RUN pip install --no-cache-dir python-multipart
@@ -47,6 +49,10 @@ COPY . .
 RUN poetry config virtualenvs.create false && \
     poetry install --no-interaction --no-ansi --only main --extras chatui 2>&1 || \
     (echo "Retrying after delay..." && sleep 10 && poetry install --no-interaction --no-ansi --only main --extras chatui)
+
+# Force reinstall torch and extensions to ensure compatibility (fix for poetry overwriting versions)
+RUN pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.1+cpu.html
 
 EXPOSE 8000
 

@@ -113,6 +113,9 @@ def validate_db_connection(connection_string: str) -> Dict[str, Any]:
     """
     Validate a database connection string and retrieve schema information.
     Use this to check if the agent can connect to the provided database.
+    
+    When validation is successful, the connection string is registered in the
+    object registry so that other tools (like get_dataset_preview) can access it.
 
     Args:
         connection_string: Database connection string (e.g., postgresql+psycopg2://user:pass@host:port/dbname)
@@ -124,6 +127,11 @@ def validate_db_connection(connection_string: str) -> Dict[str, Any]:
         engine = create_engine(connection_string)
         inspector = inspect(engine)
         table_names = inspector.get_table_names()
+        
+        # Register the connection string in the object registry for other tools to use
+        object_registry = ObjectRegistry()
+        object_registry.register(str, "db_connection_string", connection_string, overwrite=True, immutable=True)
+        logger.info(f"Registered database connection string in object registry")
         
         return {
             "valid": True,
@@ -210,7 +218,7 @@ def initiate_model_build(
         # Import here to avoid circular dependencies
         from plexe.model_builder import ModelBuilder
 
-        gemini_model = "gemini/gemini-2.5-pro"
+        gemini_model = "gemini/gemini-2.5-flash"
 
         model_builder = ModelBuilder(
             provider=ProviderConfig(

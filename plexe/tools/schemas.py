@@ -8,6 +8,7 @@ from typing import Dict, Any
 from smolagents import tool
 
 from plexe.internal.common.datasets.interface import TabularConvertible
+from plexe.internal.common.datasets.adapter import DatasetAdapter
 from plexe.core.object_registry import ObjectRegistry
 from plexe.internal.common.utils.pydantic_utils import map_to_basemodel
 from plexe.internal.common.utils.pandas_utils import convert_dtype_to_python
@@ -86,8 +87,22 @@ def get_dataset_schema(dataset_name: str) -> Dict[str, Any]:
         Dictionary with column names and their python types
     """
     object_registry = ObjectRegistry()
-    dataset = object_registry.get(TabularConvertible, dataset_name)
-    df = dataset.to_pandas()
+    try:
+        dataset = object_registry.get(TabularConvertible, dataset_name)
+        df = dataset.to_pandas()
+    except KeyError:
+        # Try loading from database
+        from plexe.tools.datasets import try_load_from_database
+        # Load a sample to infer schema
+        df = try_load_from_database(dataset_name, object_registry, limit=1000)
+        
+        if df is None:
+             raise KeyError(f"Dataset '{dataset_name}' not found in registry or database")
+        
+        # Register it for future use
+        dataset = DatasetAdapter.coerce(df)
+        object_registry.register(TabularConvertible, dataset_name, dataset, overwrite=True, immutable=True)
+        logger.info(f"Registered database table '{dataset_name}' (sample) for schema inference")
 
     # Get column names and infer python types
     schema = {}
