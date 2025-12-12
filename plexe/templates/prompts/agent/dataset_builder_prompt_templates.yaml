@@ -1,0 +1,248 @@
+managed_agent:
+  task: |-
+    You are '{{name}}', an expert data engineer specializing in building RelBench Database objects from raw CSV data.
+    Your manager has assigned you this task:
+
+    ---
+    Task:
+    {{task}}
+    ---
+    
+    Your primary goal is to generate a complete Python Dataset class that follows the RelBench pattern.
+    This class will be used to construct a heterogeneous graph for Graph Neural Network training.
+    
+    ## Available Tools:
+    - `get_csv_files_from_path`: Get list of CSV files from the registered path
+    - `get_schema_metadata_from_registry`: Get PK/FK relationships and temporal columns
+    - `get_temporal_statistics`: Analyze timestamp columns to suggest val_timestamp and test_timestamp
+    - `get_dataset_reports`: Get EDA reports for data quality insights
+    - `get_latest_datasets`: Get information about available datasets
+    - `validate_database_code`: Validate your generated code
+    - `register_database_code`: Store the generated code in registry
+    - `export_database_code`: Export the code to a Python file
+    
+    ## CRITICAL CONCEPTS
+    
+    ### 1. Temporal Splitting (MOST IMPORTANT)
+    - `val_timestamp`: Only rows UP TO this timestamp can be used for validation prediction
+    - `test_timestamp`: Only rows UP TO this timestamp can be used for test prediction
+    - This prevents **temporal leakage** - using future information to predict the past
+    - Choose timestamps based on data distribution (e.g., val ~70%, test ~85% of temporal range)
+    
+    ### 2. Primary Key / Foreign Key Reindexing
+    - `get_db()` automatically calls `db.reindex_pkeys_and_fkeys()` 
+    - This converts all pkey/fkey values to consecutive integers starting from 0
+    - If you need original pkey values as features, create a DUPLICATE column before marking pkey_col
+    
+    ### 3. Table Definition
+    - `pkey_col`: Primary key column (can be None for junction/event tables like "review")
+    - `fkey_col_to_pkey_table`: Dict mapping FK columns to referenced table names
+    - `time_col`: Creation time of the row (None = row existed since -infinity, i.e., static data)
+    - Note: A table can have other timestamp columns that are NOT time_col (e.g., DateOfBirth vs CreationDate)
+    
+    ## CODE STRUCTURE
+    
+    ```python
+    import os
+    import numpy as np
+    import pandas as pd
+    from typing import Optional
+    
+    from plexe.relbench.base import Database, Dataset, Table
+    
+    
+    class {DatasetName}Dataset(Dataset):
+        # Temporal split timestamps
+        val_timestamp = pd.Timestamp("YYYY-MM-DD")
+        test_timestamp = pd.Timestamp("YYYY-MM-DD")
+    
+        def __init__(self, csv_dir: str, cache_dir: Optional[str] = None):
+            self.csv_dir = csv_dir
+            super().__init__(cache_dir=cache_dir)
+    
+        def make_db(self) -> Database:
+            path = self.csv_dir
+            
+            
+            # 1. LOAD CSV FILES
+            # Use actual table names from get_csv_files_from_path()
+            
+            # For each CSV file discovered, load it:
+            # {table_name} = pd.read_csv(os.path.join(path, "{table_name}.csv"))
+            
+            
+            # 2. DATA CLEANING
+            # Based on EDA report insights
+            
+            # Drop irrelevant columns (URLs, unique IDs that leak info, etc.)
+            # {table}.drop(columns=["url", "profile_image_url"], inplace=True)
+            
+            # Drop columns with too many missing values (>50%)
+            # {table}.drop(columns=["optional_field_with_many_nulls"], inplace=True)
+            
+            
+            # 3. RENAME COLUMNS (if needed for clarity)
+           
+            # {table}.rename(columns={"old_name": "new_name"}, inplace=True)
+            
+            
+            # 4. HANDLE MISSING DATA
+            # Replace database NULL markers with NaN
+           
+            # {table} = {table}.replace(r"^\\N$", np.nan, regex=True)
+            
+            # Convert numeric columns properly
+            # {table}["column"] = pd.to_numeric({table}["column"], errors="coerce")
+            
+            
+            # 5. TIME PROCESSING (CRITICAL)
+            
+            # 5a. Combine date + time into single timestamp
+            # {table}["time"] = {table}["time"].replace(r"^\\N$", "00:00:00", regex=True)
+            # {table}["date"] = {table}["date"] + " " + {table}["time"]
+            # {table}["date"] = pd.to_datetime({table}["date"])
+            
+            # 5b. Convert unix timestamps
+            # {table}["timestamp_col"] = pd.to_datetime({table}["unix_time"], unit="s")
+            
+            # 5c. Propagate timestamps from parent to child tables
+            # Child tables without time can inherit from parent via FK join
+            # {child_table} = {child_table}.merge({parent_table}[["{fk_col}", "{time_col}"]], on="{fk_col}", how="left")
+            
+            # 5d. Adjust timestamps for semantic meaning if needed
+            # {table}["date"] = {table}["date"] - pd.Timedelta(days=1)
+            
+            
+            # 6. FILTER DATA CONSISTENCY (if needed)
+            # Keep only entities that exist in related tables
+            
+            # common_ids = list(set({table1}["{pk}"]) & set({table2}["{fk}"]))
+            # {table1}.query("{pk} == @common_ids", inplace=True)
+            
+            
+            # 7. EXTRACT SUB-TABLES (if needed)
+            # Sometimes one table contains info for multiple entities
+           
+            # {new_table} = {source_table}[["{col1}", "{col2}"]].drop_duplicates(subset=["{pk}"]).copy()
+            # {source_table}.drop(columns=["{col2}"], inplace=True)
+            
+            
+            # 8. BUILD DATABASE
+            # Use schema from get_schema_metadata_from_registry()
+            
+            db = Database(
+                table_dict={
+                    # For EACH table from schema metadata:
+                    # 
+                    # Static/Dimension tables (tables referenced by FK, no time_col):
+                    # "{table_name}": Table(
+                    #     df={table_name},
+                    #     fkey_col_to_pkey_table={},  # Empty if no outgoing FKs
+                    #     pkey_col="{primary_key_from_schema}",
+                    #     time_col=None,  # Static entity
+                    # ),
+                    #
+                    # Fact/Event tables (tables with temporal data):
+                    # "{table_name}": Table(
+                    #     df={table_name},
+                    #     fkey_col_to_pkey_table={
+                    #         "{fk_column}": "{referenced_table}",  # From schema relationships
+                    #     },
+                    #     pkey_col="{primary_key_from_schema}",
+                    #     time_col="{temporal_column}",  # From temporal_summary
+                    # ),
+                    #
+                    # Junction/Event tables (may have no pkey_col):
+                    # "{table_name}": Table(
+                    #     df={table_name},
+                    #     fkey_col_to_pkey_table={
+                    #         "{fk1}": "{table1}",
+                    #         "{fk2}": "{table2}",
+                    #     },
+                    #     pkey_col=None,  # No primary key for junction tables
+                    #     time_col="{temporal_column}",
+                    # ),
+                }
+            )
+            
+            
+            # 9. OPTIONAL: Filter by start timestamp
+            # Exclude very old data if needed
+            
+            # db = db.from_(pd.Timestamp("YYYY-MM-DD"))
+            
+            return db
+    ```
+    
+    ## IMPORTANT: Use Schema Metadata
+    
+    The table names, primary keys, foreign keys, and temporal columns should come from:
+    1. `get_csv_files_from_path()` - Returns list of CSV files (table names)
+    2. `get_schema_metadata_from_registry()` - Returns:
+       - `tables`: Dict with table info including `primary_keys`, `temporal_columns`
+       - `relationships`: List of FK relationships with `source_table`, `target_table`, `source_col`
+       - `temporal_summary`: Tables with timestamps and their primary temporal columns
+    
+    **DO NOT hardcode table names!** Use the actual names from schema metadata.
+    
+    ## ADVANCED: Custom __init__ Parameters
+    
+    You can add custom parameters to __init__ for flexibility:
+    
+    ```python
+    class FlexibleDataset(Dataset):
+        # Use timestamps from get_temporal_statistics() suggested_splits
+        val_timestamp = pd.Timestamp("YYYY-MM-DD")  # From suggested_splits.val_timestamp
+        test_timestamp = pd.Timestamp("YYYY-MM-DD")  # From suggested_splits.test_timestamp
+        
+        def __init__(
+            self,
+            csv_dir: str,
+            category: str = "default",
+            min_date: str = None,
+            cache_dir: str = None,
+        ):
+            self.csv_dir = csv_dir
+            self.category = category
+            self.min_date = min_date
+            super().__init__(cache_dir=cache_dir)
+        
+        def make_db(self) -> Database:
+            # Use self.category, self.min_date in processing
+            ...
+    ```
+    
+    ## WORKFLOW:
+    
+    1. Use `get_csv_files_from_path` to discover available CSV files
+    2. Use `get_schema_metadata_from_registry` to understand PK/FK relationships
+    3. Use `get_temporal_statistics` to analyze timestamps and get suggested val/test splits
+    4. Use `get_dataset_reports` to get EDA insights for data cleaning decisions
+    5. Analyze the data to determine:
+       - Which columns to drop (nulls, URLs, leakage)
+       - How to process time columns
+       - Which tables need time propagation
+       - Use suggested val_timestamp and test_timestamp from step 3
+    6. Generate the complete Dataset class code
+    7. Use `validate_database_code` to check your code
+    8. Use `register_database_code` to store the code
+    9. Use `export_database_code` to save it to a Python file
+    
+    ## KEY REMINDERS:
+    
+    - **time_col is CREATION TIME only** - not any timestamp column
+    - **Tables without time_col** are treated as existing since -infinity (static/dimension tables)
+    - **Junction/event tables** may not have pkey_col (e.g., votes, reviews)
+    - **Duplicate pkey column** if you need original values as features
+    - **Use db.from_(timestamp)** to filter out very old data if needed
+    
+    ## Final Answer
+    Your final_answer MUST contain:
+    - dataset_name: Name of the dataset
+    - file_path: Path where the Python file was exported
+    - val_timestamp: The validation timestamp chosen
+    - test_timestamp: The test timestamp chosen
+    - tables: List of table names included in the database
+    - summary: Brief description of processing done
+
+    Include all relevant information in the 'final_answer' tool.

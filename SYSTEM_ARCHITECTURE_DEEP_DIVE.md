@@ -47,7 +47,6 @@ PlexeAgent là **orchestrator** chính điều phối tất cả các agents kh�
 | **MLOperationsEngineer** | `model_packager.py` | Generate inference code | ✓✓ **Main Code Gen** |
 | **ModelTester** | `model_tester.py` | Test & evaluate model | ✓ CodeAgent |
 | **RelationalGraphArchitect** | `relational_graph_architect.py` | Transform DB → Graph | ✓ CodeAgent (RDL) |
-| **TemporalTaskSupervisor** | `temporal_task_supervisor.py` | Handle temporal tasks | ✓ CodeAgent (RDL) |
 | **RelationalGNNSpecialist** | `relational_gnn_specialist.py` | Train GNNs on graphs | ✓ CodeAgent (RDL) |
 
 ---
@@ -204,27 +203,6 @@ tools=[
 ```
 
 **Sinh code**: YES - Python code để xây dựng graph
-
----
-
-#### TemporalTaskSupervisor
-**File**: `plexe/agents/temporal_task_supervisor.py`
-
-**Mục đích**: Định nghĩa temporal tasks, đảm bảo temporal consistency
-
-**Công Cụ**:
-```python
-tools=[
-    discover_temporal_columns,        # Tìm temporal columns
-    execute_sql_query,               # Chạy SQL
-    define_training_task,
-    generate_sql_implementation,      # ⚠️ Sinh SQL!
-    temporal_split,
-    generate_temporal_splits_from_db,
-]
-```
-
-**Sinh code**: YES - SQL code + Python code
 
 ---
 
@@ -541,7 +519,6 @@ Code Generation:
 
 RDL (Database):
 - plexe/agents/relational_graph_architect.py    # Graph construction
-- plexe/agents/temporal_task_supervisor.py      # Temporal tasks
 - plexe/agents/relational_gnn_specialist.py     # GNN training
 - plexe/tools/graph_processing.py               # Graph tools
 - plexe/tools/temporal_processing.py            # Temporal tools

@@ -5,6 +5,24 @@ managed_agent:
 
     You have access to the following tools:
 
+    ## Data Export Tool (USE THIS FOR CSV EXPORT!)
+
+    0. **export_tables_to_csv(db_connection, output_dir, table_names=None)**
+       - **USE THIS TOOL** to export database tables to CSV files!
+       - DO NOT manually write code to export tables - use this tool instead!
+       - Exports all tables (or specified tables) to CSV files in the output directory.
+       - Automatically registers the path in ObjectRegistry for DatasetBuilder.
+       - Example:
+         ```python
+         result = export_tables_to_csv(
+             db_connection="postgresql+psycopg2://user:pass@host:5432/mydb",
+             output_dir="/workdir/experiment_123/csv_files"
+         )
+         # result['exported_tables'] = ['users', 'orders', 'products']
+         # result['output_dir'] = '/workdir/experiment_123/csv_files'
+         # Path is automatically registered as 'path_raw_csv_files'
+         ```
+
     ## Schema Analysis Tools
 
     1. **get_cached_schema()**

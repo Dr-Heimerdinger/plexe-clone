@@ -17,3 +17,4 @@ from . import io_manager
 # Relational Deep Learning (RDL) tools
 from . import graph_processing
 from . import gnn_processing
+from . import database_builder

@@ -995,3 +995,27 @@ def get_dataset_reports() -> Dict[str, Dict]:
     except Exception as e:
         logger.warning(f"⚠️ Error getting EDA reports: {str(e)}")
         return {}
+
+
+@tool
+def register_data_source_path(path: str, description: str = "raw_csv_files") -> str:
+    """
+    Register a file system path (directory or file) in the ObjectRegistry so other agents can locate data.
+    
+    Args:
+        path: The absolute or relative path to the data.
+        description: A short key/description for this path (default: "raw_csv_files").
+                     This will be used as the key in the registry (e.g., "path_raw_csv_files").
+    
+    Returns:
+        Confirmation message.
+    """
+    try:
+        object_registry = ObjectRegistry()
+        key = f"path_{description}"
+        object_registry.register(str, key, path, overwrite=True)
+        logger.info(f"✅ Registered data path '{path}' under key '{key}'")
+        return f"Successfully registered path '{path}' under key '{key}'"
+    except Exception as e:
+        logger.error(f"Failed to register data path: {e}")
+        return f"Error registering data path: {str(e)}"

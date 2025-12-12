@@ -7,3 +7,4 @@ This package contains agent implementations for various tasks in the Plexe platf
 # ruff: noqa: F401
 from .relational_graph_architect import RelationalGraphArchitectAgent
 from .relational_gnn_specialist import RelationalGNNSpecialistAgent
+from .dataset_builder import DatasetBuilderAgent

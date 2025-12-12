@@ -18,11 +18,30 @@ from torch_geometric.data import HeteroData
 # ObjectRegistry for sharing data between agents
 from plexe.core.object_registry import ObjectRegistry
 
-# Import get_table_columns from temporal_processing for schema verification
-# This tool is critical for ensuring agents use correct column names from database
-from plexe.tools.temporal_processing import get_table_columns
-
 logger = logging.getLogger(__name__)
+
+
+@tool
+def get_table_columns(db_connection: str, table_name: str) -> List[str]:
+    """
+    Get the list of column names for a specific table in the database.
+    Use this to verify column names before writing SQL queries.
+    
+    Args:
+        db_connection: Database connection string.
+        table_name: Name of the table.
+        
+    Returns:
+        List of column names.
+    """
+    try:
+        engine = create_engine(db_connection)
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return columns
+    except Exception as e:
+        logger.error(f"Error getting columns for table {table_name}: {e}")
+        return []
 
 
 # =============================================================================
@@ -704,6 +723,115 @@ def load_table_data(
         
         return {
             "error": f"Failed to load table data: {error_msg}{hint}",
+            "traceback": traceback.format_exc()
+        }
+
+
+@tool
+def export_tables_to_csv(
+    db_connection: str,
+    output_dir: str,
+    table_names: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Export database tables to CSV files for subsequent data processing.
+    
+    This tool connects to the database, exports specified tables (or all tables)
+    to CSV files in the given directory, and registers the path in ObjectRegistry
+    for use by DatasetBuilder agent.
+    
+    Args:
+        db_connection: SQLAlchemy connection string (e.g., postgresql+psycopg2://user:pass@host:port/db)
+        output_dir: Directory to save CSV files. Will be created if it doesn't exist.
+        table_names: Optional list of table names to export. If None, exports all tables.
+    
+    Returns:
+        Dictionary containing:
+        - 'success': Boolean indicating success
+        - 'exported_tables': List of exported table names
+        - 'output_dir': Path to the output directory
+        - 'file_info': Dict with table name -> {path, row_count, columns}
+        - 'registry_key': Key under which the path is registered
+    
+    Example:
+        >>> result = export_tables_to_csv(
+        ...     "postgresql+psycopg2://user:pass@localhost:5432/mydb",
+        ...     "/workdir/csv_files"
+        ... )
+        >>> print(result['exported_tables'])
+        ['users', 'orders', 'products']
+    """
+    import os
+    from pathlib import Path
+    
+    try:
+        engine = create_engine(db_connection)
+        inspector = inspect(engine)
+        
+        # Get table names if not specified
+        if table_names is None:
+            table_names = inspector.get_table_names()
+        
+        if not table_names:
+            return {
+                "success": False,
+                "error": "No tables found in the database."
+            }
+        
+        # Create output directory
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        exported_tables = []
+        file_info = {}
+        
+        # Export each table
+        with engine.connect() as conn:
+            for table_name in table_names:
+                try:
+                    query = text(f'SELECT * FROM "{table_name}"')
+                    df = pd.read_sql(query, conn)
+                    
+                    csv_path = output_path / f"{table_name}.csv"
+                    df.to_csv(csv_path, index=False)
+                    
+                    exported_tables.append(table_name)
+                    file_info[table_name] = {
+                        "path": str(csv_path),
+                        "row_count": len(df),
+                        "columns": list(df.columns)
+                    }
+                    
+                    logger.info(f"✅ Exported '{table_name}' ({len(df)} rows) to {csv_path}")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to export table '{table_name}': {e}")
+                    file_info[table_name] = {"error": str(e)}
+        
+        # Register the path in ObjectRegistry
+        try:
+            object_registry = ObjectRegistry()
+            registry_key = "path_raw_csv_files"
+            object_registry.register(str, registry_key, str(output_path), overwrite=True)
+            logger.info(f"✅ Registered CSV path under key '{registry_key}'")
+        except Exception as e:
+            logger.warning(f"Could not register path in registry: {e}")
+            registry_key = None
+        
+        return {
+            "success": True,
+            "exported_tables": exported_tables,
+            "output_dir": str(output_path),
+            "file_info": file_info,
+            "registry_key": registry_key,
+            "total_tables": len(exported_tables)
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": f"Failed to export tables: {str(e)}",
             "traceback": traceback.format_exc()
         }
 

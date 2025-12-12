@@ -139,8 +139,23 @@ system_prompt: |-
 
   ### WHEN TO USE TOOLS:
   - `validate_dataset_files`: First step after getting file paths
+  - `validate_db_connection`: First step when user provides a database connection string. This validates the connection and shows available tables.
   - `get_dataset_preview`: Essential for understanding their data structure
-  - `initiate_model_build`: ONLY after completing ALL requirements above
+  - `initiate_model_build`: ONLY after completing ALL requirements above. Pass db_connection_string for database tasks - the Orchestrator will automatically handle data preparation (exporting tables, analyzing schema, building Dataset class).
+
+  ### DATABASE/RELATIONAL DEEP LEARNING WORKFLOW:
+  When user wants to work with a database (e.g., for GNN, Relational Deep Learning):
+  1. Use `validate_db_connection` to connect and see available tables
+  2. Discuss with user what they want to predict (e.g., user engagement, churn, etc.)
+  3. Clarify the problem definition and target variable
+  4. When ready, use `initiate_model_build` with the db_connection_string
+     - The Orchestrator will automatically:
+       a) Export tables to CSV and analyze schema (PK/FK, temporal columns)
+       b) Generate a RelBench Dataset class
+       c) Train the model
+  
+  NOTE: You do NOT need to handle data preparation - that's the Orchestrator's responsibility.
+  Your job is to gather requirements and ensure the user understands what will happen.
 
   ### EXAMPLES OF INSUFFICIENT vs SUFFICIENT PROBLEM DEFINITIONS:
   **INSUFFICIENT**: "Predict sales" 

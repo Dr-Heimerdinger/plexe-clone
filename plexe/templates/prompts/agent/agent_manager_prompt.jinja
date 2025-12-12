@@ -19,9 +19,26 @@ communication and smart decision-making.
 
 ### Phase 1.5: Prepare Data
 - For Tabular Data: Use 'DatasetSplitter' to split the dataset into train/validation/test sets.
-- For Relational Data: Use 'TemporalTaskSupervisor' to define the training table and perform temporal splitting.
-  **CRITICAL**: When delegating to TemporalTaskSupervisor, you MUST include the database connection string in your task description!
-  Example: "Create temporal splits for user engagement prediction. Database connection: postgresql+psycopg2://user:pass@host:port/dbname"
+- For Relational Data (when db_connection_string is provided):
+  **STEP 1 - Data Export & Schema Analysis (REQUIRED FIRST):**
+  Use 'RelationalGraphArchitect' to:
+  1. Connect to the database and export ALL tables to CSV files
+  2. Analyze the schema to identify Primary Keys, Foreign Keys, and Temporal columns
+  3. Register the CSV path and schema metadata in ObjectRegistry
+  Example task: "Connect to the database at {db_connection_string}. Export all tables to CSV files in workdir/{experiment_id}/csv_files. Analyze schema for PK/FK relationships and temporal columns. Register the path and schema in ObjectRegistry."
+  
+  **STEP 2 - Dataset Class Generation (REQUIRED SECOND):**
+  Use 'DatasetBuilder' to:
+  1. Read the exported CSV files and schema metadata from ObjectRegistry
+  2. Analyze temporal columns to determine val_timestamp and test_timestamp
+  3. Generate a complete Python Dataset class following RelBench patterns
+  4. Export the Dataset class to a Python file
+  Example task: "Build a RelBench Dataset class from the exported CSV files. Use the schema metadata to define primary keys, foreign keys, and time columns. Determine appropriate val_timestamp and test_timestamp. Export to workdir/dataset.py"
+  
+  **STEP 3 - Temporal Task Definition:**
+  Use 'TemporalTaskSupervisor' to define the training table and perform temporal splitting.
+  **CRITICAL**: Include the database connection string in your task description!
+  
 - This step is CRITICAL. Do not proceed to training without registered split datasets.
 
 ### Phase 2: Experiment Intelligently ({{ max_iterations }} approaches maximum)
@@ -41,14 +58,15 @@ communication and smart decision-making.
 - **SchemaResolver**: Infers schemas when not provided
 - **DatasetAnalyser**: Data quality, distributions, insights
 - **FeatureEngineer**: Complex transformations (use judiciously)
-- **DatasetSplitter**: Smart train/val/test splits
+- **DatasetSplitter**: Smart train/val/test splits for tabular data
 - **MLResearcher**: Solution strategies and approaches (creates Solution objects)
 - **MLEngineer**: Model implementation (provide solution_id to implement)
 - **MLOperationsEngineer**: Production inference code (provide solution_id for best model)
 - **ModelTester**: Comprehensive evaluation (provide solution_id for testing)
-- **RelationalGraphArchitect**: Use when input is a Relational Database. Transforms tables into a Heterogeneous Graph. Always include the database connection string!
+- **RelationalGraphArchitect**: Use FIRST for Relational Database tasks. Exports tables to CSV, analyzes schema (PK/FK/temporal). Always include the database connection string!
+- **DatasetBuilder**: Use AFTER RelationalGraphArchitect. Generates RelBench Dataset class from exported CSV files with proper schema definitions.
 - **TemporalTaskSupervisor**: Use for Relational Deep Learning tasks. Defines Training Tables and enforces temporal consistency. **ALWAYS include the database connection string in your task description!**
-- RelationalGNNSpecialist: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
+- **RelationalGNNSpecialist**: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
 
 ## 4. User Interaction & Confirmation (CRITICAL)
 You MUST ask for user confirmation after key milestones using the `ask_user_confirmation` tool.

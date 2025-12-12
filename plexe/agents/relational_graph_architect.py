@@ -9,6 +9,7 @@ from smolagents import CodeAgent, LiteLLMModel
 
 from plexe.config import config
 from plexe.internal.common.utils.agents import get_prompt_templates
+from plexe.tools.datasets import register_data_source_path
 from plexe.tools.graph_processing import (
     extract_schema_metadata,
     load_table_data,
@@ -25,6 +26,8 @@ from plexe.tools.graph_processing import (
     get_mapper_summary,
     # Schema verification tool - critical for correct column names
     get_table_columns,
+    # Export tables to CSV
+    export_tables_to_csv,
     # Deprecated but kept for compatibility
     create_id_mapping,
 )
@@ -59,6 +62,7 @@ class RelationalGraphArchitectAgent:
             description=(
                 "Expert in Graph Representation Learning and Heterogeneous Graph Construction. "
                 "Transforms multi-table relational databases into Heterogeneous Graphs for GNNs. "
+                "Can connect to databases, export tables to CSV, analyze schema relationships (PK/FK), and determine temporal splits. "
                 "IMPORTANT: The database columns use snake_case naming convention (e.g., owner_user_id instead of OwnerUserId). "
                 "Always check the actual column names from the schema before generating SQL."
             ),
@@ -68,6 +72,9 @@ class RelationalGraphArchitectAgent:
                 extract_schema_metadata,
                 get_cached_schema,
                 load_table_data,
+                register_data_source_path,
+                # Export tables to CSV for DatasetBuilder
+                export_tables_to_csv,
                 # Column name verification - USE BEFORE WRITING SQL!
                 get_table_columns,
                 # EntityMapper tools (for ID mapping and prediction interpretation)

@@ -20,8 +20,8 @@ from plexe.agents.model_tester import ModelTesterAgent
 from plexe.agents.model_trainer import ModelTrainerAgent
 from plexe.agents.schema_resolver import SchemaResolverAgent
 from plexe.agents.relational_graph_architect import RelationalGraphArchitectAgent
-from plexe.agents.temporal_task_supervisor import TemporalTaskSupervisorAgent
 from plexe.agents.relational_gnn_specialist import RelationalGNNSpecialistAgent
+from plexe.agents.dataset_builder import DatasetBuilderAgent
 from plexe.config import config
 from plexe.core.object_registry import ObjectRegistry
 from plexe.internal.models.entities.artifact import Artifact
@@ -184,15 +184,15 @@ class PlexeAgent:
             chain_of_thought_callable=self.chain_of_thought_callable,
         ).agent
 
-        # Create Temporal Task Supervisor Agent
-        self.temporal_task_supervisor_agent = TemporalTaskSupervisorAgent(
+        # Create Relational GNN Specialist Agent
+        self.relational_gnn_specialist_agent = RelationalGNNSpecialistAgent(
             model_id=self.ml_engineer_model_id,
             verbose=verbose,
             chain_of_thought_callable=self.chain_of_thought_callable,
         ).agent
 
-        # Create Relational GNN Specialist Agent
-        self.relational_gnn_specialist_agent = RelationalGNNSpecialistAgent(
+        # Create Dataset Builder Agent - builds RelBench Database from CSV files
+        self.dataset_builder_agent = DatasetBuilderAgent(
             model_id=self.ml_engineer_model_id,
             verbose=verbose,
             chain_of_thought_callable=self.chain_of_thought_callable,
@@ -209,8 +209,8 @@ class PlexeAgent:
             self.mlops_engineer,
             self.model_tester_agent,
             self.relational_graph_architect_agent,
-            self.temporal_task_supervisor_agent,
             self.relational_gnn_specialist_agent,
+            self.dataset_builder_agent,
         ]
 
         # Create orchestrator agent - coordinates the workflow
