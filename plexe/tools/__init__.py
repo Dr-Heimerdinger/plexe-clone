@@ -18,3 +18,4 @@ from . import io_manager
 from . import graph_processing
 from . import gnn_processing
 from . import database_builder
+from . import task_builder

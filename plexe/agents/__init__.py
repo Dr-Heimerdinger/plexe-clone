@@ -8,3 +8,4 @@ This package contains agent implementations for various tasks in the Plexe platf
 from .relational_graph_architect import RelationalGraphArchitectAgent
 from .relational_gnn_specialist import RelationalGNNSpecialistAgent
 from .dataset_builder import DatasetBuilderAgent
+from .task_builder import TaskBuilderAgent
