@@ -868,8 +868,16 @@ def export_task_code(
             f.write(code)
             
         # Register export info
+        # Extract class name from code
+        import re
+        class_match = re.search(r"class\s+(\w+)\s*\(", code)
+        if class_match:
+            class_name = class_match.group(1)
+        else:
+            class_name = task_name # Fallback
+
         export_info = {
-            "class_name": task_name,
+            "class_name": class_name,
             "export_path": file_path,
             "module_name": "task"
         }

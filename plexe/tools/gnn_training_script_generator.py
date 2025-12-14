@@ -224,7 +224,18 @@ def main():
     # -------------------------------------------------------------------------
     print("\\n[Step 1] Loading Dataset and Task...")
     
-    dataset = {dataset_class}()
+    # Try to find csv_dir in the same directory as the script
+    csv_dir = os.path.join(WORKING_DIR, "csv_files")
+    if not os.path.exists(csv_dir):
+        # Fallback to looking for csv files in the working dir itself
+        csv_dir = WORKING_DIR
+        
+    try:
+        dataset = {dataset_class}(csv_dir=csv_dir)
+    except TypeError:
+        # Fallback if dataset doesn't accept csv_dir (e.g. standard RelBench datasets)
+        dataset = {dataset_class}()
+        
     task = {task_class}(dataset)
     db = dataset.get_db()
     
@@ -265,8 +276,13 @@ def main():
         text_embedder_cfg=text_embedder_cfg,
         cache_dir=CACHE_DIR,
     )
-    
-    print(f"  Node types: {{data.node_types}}")
+        # Clean up text embedder to free GPU memory
+    del text_embedder_cfg
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        print(f"  Node types: {{data.node_types}}")
     print(f"  Edge types: {{len(data.edge_types)}}")
     for node_type in data.node_types:
         print(f"    - {{node_type}}: {{data[node_type].num_nodes}} nodes")
@@ -464,7 +480,8 @@ class GloveTextEmbedding:
         )
 
     def __call__(self, sentences: List[str]) -> Tensor:
-        return torch.from_numpy(self.model.encode(sentences))
+        # Encode and ensure float32 tensor
+        return torch.from_numpy(self.model.encode(sentences)).float()
 '''
 
 GLOVE_TEXT_EMBEDDER_CONFIG = '''
@@ -714,13 +731,34 @@ def execute_training_script(
     import subprocess
     
     try:
+        # Resolve path if it doesn't exist
+        if not os.path.exists(script_path):
+            # Try looking in working_dir from registry
+            try:
+                object_registry = ObjectRegistry()
+                working_dir = object_registry.get(str, "working_dir")
+                potential_path = os.path.join(working_dir, os.path.basename(script_path))
+                if os.path.exists(potential_path):
+                    script_path = potential_path
+            except Exception:
+                pass
+                
+        if not os.path.exists(script_path):
+             return {
+                "status": "error",
+                "error": f"Script file not found at: {script_path}",
+            }
+
         # Run the script
+        # Ensure cwd is valid
+        cwd = os.path.dirname(os.path.abspath(script_path))
+        
         result = subprocess.run(
             ["python", script_path],
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd=os.path.dirname(script_path),
+            cwd=cwd,
         )
         
         return {

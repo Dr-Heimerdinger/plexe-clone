@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =====================================================
-# Tạo subset database stack-200 (~200 records mỗi bảng)
+# Tạo subset database stack-2000 (~2000 records mỗi bảng)
 # Giữ nguyên relationships và lấy dữ liệu liên tục 30 ngày
 # ĐẢM BẢO REFERENTIAL INTEGRITY
 # =====================================================
@@ -10,15 +10,15 @@ set -e
 
 CONTAINER_NAME="plexe-clone-postgres-1"
 SOURCE_DB="stack"
-TARGET_DB="stack-200"
+TARGET_DB="stack-2000"
 DB_USER="mlflow"
 
-# Tham số - mỗi bảng ~200 records
-RECORDS_PER_TABLE=200     # Số records mục tiêu cho mỗi bảng
-TIME_WINDOW_DAYS=30       # Lấy dữ liệu trong 30 ngày liên tục
+# Tham số - mỗi bảng ~2000 records
+RECORDS_PER_TABLE=2000     # Số records mục tiêu cho mỗi bảng
+TIME_WINDOW_DAYS=60       # Lấy dữ liệu trong 30 ngày liên tục
 
 echo "========================================="
-echo "Create Stack-200 Subset Database"
+echo "Create Stack-2000 Subset Database"
 echo "========================================="
 echo "Source DB: $SOURCE_DB"
 echo "Target DB: $TARGET_DB"
@@ -59,7 +59,7 @@ SELECT
     to_char(start_day + INTERVAL '30 days', 'YYYY-MM-DD') as end_date,
     window_count
 FROM window_counts
-WHERE window_count >= 200
+WHERE window_count >= 2000
 ORDER BY window_count ASC
 LIMIT 1;
 EOSQL
@@ -108,14 +108,14 @@ echo "  End: $END_DATE"
 echo "  Posts in window: $ACTIVITY"
 echo ""
 
-# Step 2: Extract subset với đảm bảo referential integrity, mỗi bảng ~200 records
+# Step 2: Extract subset với đảm bảo referential integrity, mỗi bảng ~2000 records
 echo "📝 Step 2: Extracting subset data (~$RECORDS_PER_TABLE per table)..."
 cat > /tmp/extract_subset.sql << EOSQL
 -- =====================================================
--- STRATEGY: ~200 records per table with referential integrity
+-- STRATEGY: ~2000 records per table with referential integrity
 -- =====================================================
 
--- Step 2.1: Get 200 posts in time window
+-- Step 2.1: Get 2000 posts in time window
 CREATE TEMP TABLE base_posts AS
 SELECT id, owner_user_id, accepted_answer_id, parent_id
 FROM posts
@@ -159,7 +159,7 @@ BEGIN
     END LOOP;
 END \$\$;
 
--- Step 2.3: Get 200 users (prioritize those with posts, then add more)
+-- Step 2.3: Get 2000 users (prioritize those with posts, then add more)
 CREATE TEMP TABLE all_user_ids AS
 SELECT DISTINCT owner_user_id as id
 FROM posts
@@ -167,7 +167,7 @@ WHERE id IN (SELECT id FROM all_post_ids)
   AND owner_user_id IS NOT NULL
 LIMIT $RECORDS_PER_TABLE;
 
--- If we have fewer than 200 users from posts, add more from the time window
+-- If we have fewer than 2000 users from posts, add more from the time window
 INSERT INTO all_user_ids
 SELECT DISTINCT u.id
 FROM users u
@@ -182,25 +182,25 @@ SELECT 'posts' as type, COUNT(*) as count FROM all_post_ids
 UNION ALL
 SELECT 'users', COUNT(*) FROM all_user_ids;
 
--- Step 2.4: Export users (limit 200)
+-- Step 2.4: Export users (limit 2000)
 \copy (SELECT * FROM users WHERE id IN (SELECT id FROM all_user_ids) LIMIT $RECORDS_PER_TABLE) TO '/tmp/subset_users.csv' CSV HEADER;
 
--- Step 2.5: Export posts (already limited to ~200) - nullify missing FKs
+-- Step 2.5: Export posts (already limited to ~2000) - nullify missing FKs
 \copy (SELECT id, CASE WHEN owner_user_id IN (SELECT id FROM all_user_ids) THEN owner_user_id ELSE NULL END as owner_user_id, post_type_id, CASE WHEN accepted_answer_id IN (SELECT id FROM all_post_ids) THEN accepted_answer_id ELSE NULL END as accepted_answer_id, CASE WHEN parent_id IN (SELECT id FROM all_post_ids) THEN parent_id ELSE NULL END as parent_id, owner_display_name, title, tags, content_license, body, creation_date FROM posts WHERE id IN (SELECT id FROM all_post_ids)) TO '/tmp/subset_posts.csv' CSV HEADER;
 
--- Step 2.6: Export votes (limit 200) - only valid FKs
+-- Step 2.6: Export votes (limit 2000) - only valid FKs
 \copy (SELECT id, CASE WHEN user_id IN (SELECT id FROM all_user_ids) THEN user_id ELSE NULL END as user_id, post_id, vote_type_id, creation_date FROM votes WHERE post_id IN (SELECT id FROM all_post_ids) ORDER BY creation_date LIMIT $RECORDS_PER_TABLE) TO '/tmp/subset_votes.csv' CSV HEADER;
 
--- Step 2.7: Export comments (limit 200) - only valid FKs
+-- Step 2.7: Export comments (limit 2000) - only valid FKs
 \copy (SELECT id, post_id, CASE WHEN user_id IN (SELECT id FROM all_user_ids) THEN user_id ELSE NULL END as user_id, content_license, user_display_name, text, creation_date FROM comments WHERE post_id IN (SELECT id FROM all_post_ids) ORDER BY creation_date LIMIT $RECORDS_PER_TABLE) TO '/tmp/subset_comments.csv' CSV HEADER;
 
--- Step 2.8: Export badges (limit 200) - only for users in subset
+-- Step 2.8: Export badges (limit 2000) - only for users in subset
 \copy (SELECT * FROM badges WHERE user_id IN (SELECT id FROM all_user_ids) ORDER BY date LIMIT $RECORDS_PER_TABLE) TO '/tmp/subset_badges.csv' CSV HEADER;
 
--- Step 2.9: Export post_links (limit 200) - only where BOTH posts exist
+-- Step 2.9: Export post_links (limit 2000) - only where BOTH posts exist
 \copy (SELECT * FROM post_links WHERE post_id IN (SELECT id FROM all_post_ids) AND related_post_id IN (SELECT id FROM all_post_ids) ORDER BY creation_date LIMIT $RECORDS_PER_TABLE) TO '/tmp/subset_post_links.csv' CSV HEADER;
 
--- Step 2.10: Export post_history (limit 200) - only valid FKs
+-- Step 2.10: Export post_history (limit 2000) - only valid FKs
 \copy (SELECT id, post_id, CASE WHEN user_id IN (SELECT id FROM all_user_ids) THEN user_id ELSE NULL END as user_id, post_history_type_id, user_display_name, content_license, revision_guid, text, comment, creation_date FROM post_history WHERE post_id IN (SELECT id FROM all_post_ids) ORDER BY creation_date LIMIT $RECORDS_PER_TABLE) TO '/tmp/subset_post_history.csv' CSV HEADER;
 
 -- Show counts
@@ -226,8 +226,8 @@ echo ""
 # Step 3: Create new database
 echo "📝 Step 3: Creating new database..."
 docker exec -i $CONTAINER_NAME psql -U $DB_USER -d postgres << EOSQL
-DROP DATABASE IF EXISTS "stack-200";
-CREATE DATABASE "stack-200";
+DROP DATABASE IF EXISTS "stack-2000";
+CREATE DATABASE "stack-2000";
 EOSQL
 
 echo "✓ Database created"
@@ -458,7 +458,7 @@ echo "✅ DONE!"
 echo "========================================="
 echo ""
 echo "Connect to subset database:"
-echo "  docker exec -it $CONTAINER_NAME psql -U $DB_USER -d stack-200"
+echo "  docker exec -it $CONTAINER_NAME psql -U $DB_USER -d stack-2000"
 echo ""
 echo "Verify data:"
 echo "  SELECT COUNT(*) FROM users;"

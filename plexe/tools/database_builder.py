@@ -324,6 +324,14 @@ def register_database_code(
     try:
         object_registry = ObjectRegistry()
         
+        # Extract class name from code
+        import re
+        class_match = re.search(r"class\s+(\w+)\s*\(", code)
+        if class_match:
+            class_name = class_match.group(1)
+        else:
+            class_name = dataset_name # Fallback
+            
         # Store the code
         code_key = f"database_code_{dataset_name}"
         object_registry.register(str, code_key, code, overwrite=True)
@@ -332,6 +340,7 @@ def register_database_code(
         metadata_key = f"database_metadata_{dataset_name}"
         metadata = {
             "dataset_name": dataset_name,
+            "class_name": class_name,
             "val_timestamp": val_timestamp,
             "test_timestamp": test_timestamp,
             "description": description,
@@ -339,12 +348,13 @@ def register_database_code(
         }
         object_registry.register(dict, metadata_key, metadata, overwrite=True)
         
-        logger.info(f"✅ Registered database code for '{dataset_name}'")
+        logger.info(f"✅ Registered database code for '{dataset_name}' (Class: {class_name})")
         
         return {
             "success": True,
             "code_key": code_key,
             "metadata_key": metadata_key,
+            "class_name": class_name,
             "message": f"Successfully registered database code for '{dataset_name}'"
         }
         
@@ -409,8 +419,16 @@ def export_database_code(
             f.write(code)
             
         # Register export info
+        # Try to get class name from metadata
+        metadata_key = f"database_metadata_{dataset_name}"
+        try:
+            metadata = object_registry.get(dict, metadata_key)
+            class_name = metadata.get("class_name", dataset_name)
+        except KeyError:
+            class_name = dataset_name
+
         export_info = {
-            "class_name": dataset_name, # Best guess, usually matches
+            "class_name": class_name,
             "export_path": file_path,
             "module_name": "dataset"
         }
@@ -543,6 +561,19 @@ def get_temporal_statistics(csv_path: Optional[str] = None, time_columns: List[s
         val_ts = all_ts_series.quantile(0.70)
         test_ts = all_ts_series.quantile(0.85)
         
+        # Check if test_ts is too close to max_timestamp
+        # If the gap is small, it might cause issues for tasks with large timedelta
+        time_range = overall_max - overall_min
+        test_gap = overall_max - test_ts
+        
+        warning = ""
+        if test_gap < (time_range * 0.05): # Less than 5% of range left
+             warning = (
+                 f"WARNING: test_timestamp is very close to max_timestamp (gap: {test_gap}). "
+                 f"Tasks with timedelta > {test_gap} will fail. "
+                 f"Consider choosing an earlier test_timestamp."
+             )
+        
         return {
             "columns_analyzed": list(column_stats.keys()),
             "statistics": column_stats,
@@ -554,10 +585,12 @@ def get_temporal_statistics(csv_path: Optional[str] = None, time_columns: List[s
             "suggested_splits": {
                 "val_timestamp": str(val_ts.date()),
                 "test_timestamp": str(test_ts.date()),
+                "max_timestamp": str(overall_max.date()),
                 "explanation": (
                     f"val_timestamp at 70th percentile: ~70% of data before this date. "
                     f"test_timestamp at 85th percentile: ~85% of data before this date. "
-                    f"This ensures sufficient training data while having meaningful validation/test sets."
+                    f"Max timestamp is {overall_max.date()}. "
+                    f"{warning}"
                 )
             }
         }

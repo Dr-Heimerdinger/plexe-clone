@@ -1,0 +1,55 @@
+# GPU-enabled Dockerfile for Training
+# Uses CUDA-enabled PyTorch wheels
+# Use this for training with: docker compose -f docker-compose.gpu.yml up --build
+
+FROM python:3.11-slim as base
+
+WORKDIR /app
+
+ENV PIP_DEFAULT_TIMEOUT=100 \
+    PIP_RETRIES=5 \
+    PYTHONUNBUFFERED=1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false
+
+# Install system dependencies
+# build-essential is often needed for compiling some python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base as deps
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir poetry
+
+COPY pyproject.toml poetry.lock* README.md ./
+
+# Install main dependencies via Poetry
+# We exclude the chatui extras initially to keep it focused on ML/Training, 
+# but can add them if needed.
+RUN poetry config virtualenvs.create false && \
+    poetry install --no-interaction --no-ansi --no-root --only main --extras chatui
+
+# Force install torch CUDA version (2.3.0 for CUDA 12.1)
+# We uninstall the poetry-installed torch first just in case
+RUN pip uninstall -y torch && \
+    pip install torch==2.3.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Install PyG dependencies with CUDA support
+RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
+
+FROM deps as app
+
+COPY . .
+
+# Install the project itself
+RUN poetry config virtualenvs.create false && \
+    poetry install --no-interaction --no-ansi --only main --extras chatui
+
+# Verify GPU availability
+RUN python -c "import torch; print(f'Torch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
+
+CMD ["uvicorn", "plexe.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,4 +1,4 @@
-I am working with the data is loaded into the `stack-200` database (connection string: `postgresql+psycopg2://mlflow:mlflow@postgres:5432/stack-200`).
+I am working with the data is loaded into the `stack-2000` database (connection string: `postgresql+psycopg2://mlflow:mlflow@postgres:5432/stack-2000`).
 I want to define a predictive task on this relational database.
 Task definition: Predict if the user will make any contribution, defined as a vote, comment, or post, to the site in the next 2 days.
 Entity filtering: We filter on active users defined as users that have made at least one comment/post/vote before the timestamp.

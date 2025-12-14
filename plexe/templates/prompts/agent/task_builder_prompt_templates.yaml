@@ -40,6 +40,20 @@ managed_agent:
     
     The SQL patterns provided are TEMPLATES - you must replace placeholders with 
     actual values from the schema.
+
+    ## CRITICAL: COLUMN NAMING CONVENTION
+    
+    **ALWAYS use snake_case for column names in your SQL queries.**
+    Even if the original database documentation or schema description uses PascalCase (e.g., UserId, CreationDate),
+    the actual CSV files and DuckDB tables in this environment use snake_case (e.g., user_id, creation_date).
+    
+    Examples:
+    - UserId -> user_id
+    - OwnerUserId -> owner_user_id
+    - CreationDate -> creation_date
+    - PostId -> post_id
+    
+    Check `get_database_schema_for_task` output carefully - it will show the correct snake_case names.
     
     ## TASK TYPES
     

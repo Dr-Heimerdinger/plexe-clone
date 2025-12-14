@@ -1,0 +1,95 @@
+# docker-compose.gpu.yml
+# GPU-enabled compose file for training
+# Use: docker compose -f docker-compose.gpu.yml up -d
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mlflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow}
+      POSTGRES_DB: ${POSTGRES_DB:-mlflow_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - plexe-net
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    depends_on:
+      - postgres
+    environment:
+      BACKEND_STORE_URI: ${MLFLOW_BACKEND_STORE_URI:-postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow_db}
+      ARTIFACT_ROOT: /mlruns
+      MLFLOW_ALLOW_ORIGINS: ${MLFLOW_ALLOW_ORIGINS:-*}
+      MLFLOW_SERVER_ALLOWED_HOSTS: ${MLFLOW_SERVER_ALLOWED_HOSTS:-mlflow,localhost,127.0.0.1,localhost:5000,127.0.0.1:5000,mlflow:5000}
+    volumes:
+      - ./mlruns:/mlruns
+    ports:
+      - "5000:5000"
+    networks:
+      - plexe-net
+
+  pgadmin:
+    image: dpage/pgadmin4:7
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "8080:80"
+    networks:
+      - plexe-net
+
+  frontend:
+    build:
+      context: ./plexe/ui/frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./plexe/ui/frontend/src:/app/src
+      - ./plexe/ui/frontend/index.html:/app/index.html
+      - ./plexe/ui/frontend/vite.config.js:/app/vite.config.js
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:8000}
+    networks:
+      - plexe-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    depends_on:
+      postgres:
+        condition: service_started
+    environment:
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MLFLOW_BACKEND_STORE_URI: ${MLFLOW_BACKEND_STORE_URI:-postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow_db}
+      MLFLOW_HTTP_REQUEST_TIMEOUT: 300
+      HF_TOKEN: ${HF_TOKEN}
+      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY}
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - plexe-net
+
+volumes:
+  postgres_data:
+
+networks:
+  plexe-net:
+    driver: bridge
