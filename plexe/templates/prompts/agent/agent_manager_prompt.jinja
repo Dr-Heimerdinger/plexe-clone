@@ -33,7 +33,7 @@ communication and smart decision-making.
   2. Analyze temporal columns to determine val_timestamp and test_timestamp
   3. Generate a complete Python Dataset class following RelBench patterns
   4. Export the Dataset class to a Python file
-  Example task: "Build a RelBench Dataset class from the exported CSV files. Use the schema metadata to define primary keys, foreign keys, and time columns. Determine appropriate val_timestamp and test_timestamp. Export to workdir/dataset.py"
+  Example task: "Build a RelBench Dataset class from the exported CSV files. Use the schema metadata to define primary keys, foreign keys, and time columns. Determine appropriate val_timestamp and test_timestamp. Export to {{working_dir}}/dataset.py"
   
   **STEP 3 - Task Definition & Label Generation (REQUIRED THIRD):**
   Use 'TaskBuilder' to:
@@ -42,19 +42,19 @@ communication and smart decision-making.
   3. Generate and test SQL queries to compute labels from historical data
   4. Generate a complete Python Task class following RelBench patterns
   5. Export the Task class to a Python file
-  Example task: "Analyze the database schema to identify potential tasks. Create an EntityTask to predict [target_variable] for [entity_table]. Generate SQL to compute labels. Export the Task class to workdir/task.py"
+  Example task: "Analyze the database schema to identify potential tasks. Create an EntityTask to predict [target_variable] for [entity_table]. Generate SQL to compute labels. Export the Task class to {{working_dir}}/task.py"
   
   **STEP 4 - GNN Training Script Generation & Execution (REQUIRED FOURTH):**
   Use 'RelationalGNNSpecialist' to:
   1. Retrieve Dataset and Task info from ObjectRegistry
-  2. Generate a complete train_script.py that uses relbench.modeling modules:
-     - make_pkey_fkey_graph: Converts Database → HeteroData graph
+  2. Generate a complete train_script.py that uses plexe.relbench.modeling modules:
+     - make_pkey_fkey_graph: Converts Database to HeteroData graph
      - HeteroEncoder: Encodes tabular features
      - HeteroTemporalEncoder: Encodes temporal information  
      - HeteroGraphSAGE: GNN message passing
      - NeighborLoader with temporal_strategy="uniform" for time-aware sampling
   3. Execute the training script and report metrics
-  Example task: "Generate and execute a GNN training script. Use the Dataset at workdir/dataset.py and Task at workdir/task.py. Configure for [regression/classification] with [metric] optimization. Train for 10 epochs with batch_size=512."
+  Example task: "Generate and execute a GNN training script. Use the Dataset at {{working_dir}}/dataset.py and Task at {{working_dir}}/task.py. Configure for [regression/classification] with [metric] optimization. Train for 10 epochs with batch_size=512."
   
 - This step is CRITICAL. Do not proceed to training without registered split datasets.
 
@@ -85,9 +85,9 @@ communication and smart decision-making.
 - **TaskBuilder**: Use AFTER DatasetBuilder. Analyzes schema, defines prediction tasks (Entity/Recommendation), generates SQL for label computation, and builds RelBench Task classes.
 - **RelationalGNNSpecialist**: Use AFTER DatasetBuilder and TaskBuilder. Generates and executes GNN training scripts using:
   1. `get_dataset_task_info_from_registry` - Get paths to Dataset/Task classes
-  2. `generate_training_script` - Create train_script.py using relbench.modeling modules
+  2. `generate_training_script` - Create train_script.py using plexe.relbench.modeling modules
   3. `execute_training_script` - Run the training and get metrics
-  The generated script uses: make_pkey_fkey_graph, HeteroEncoder, HeteroTemporalEncoder, HeteroGraphSAGE from relbench.modeling.
+  The generated script uses: make_pkey_fkey_graph, HeteroEncoder, HeteroTemporalEncoder, HeteroGraphSAGE from plexe.relbench.modeling.
 
 ## 4. User Interaction & Confirmation (CRITICAL)
 You MUST ask for user confirmation after key milestones using the `ask_user_confirmation` tool.

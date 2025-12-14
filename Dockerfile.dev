@@ -59,4 +59,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=30s \
   CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=2)"
 
-CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-exclude", ".workdir/*", "--reload-exclude", "workdir/*", "--reload-exclude", "*.pyc", "--reload-exclude", "__pycache__/*"]
+CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "plexe"]

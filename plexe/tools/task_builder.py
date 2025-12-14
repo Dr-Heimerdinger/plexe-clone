@@ -857,16 +857,36 @@ def export_task_code(
                     output_dir = f".workdir/chat-session-{timestamp}"
                     object_registry.register(str, "current_chat_session_dir", output_dir, overwrite=True)
         
-        # Create tasks subdirectory
-        tasks_dir = os.path.join(output_dir, "tasks")
-        Path(tasks_dir).mkdir(parents=True, exist_ok=True)
+        # Create output directory
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
         
         # Write the file
-        file_name = f"{dataset_name}_{task_name}_task.py"
-        file_path = os.path.join(tasks_dir, file_name)
+        file_name = "task.py"
+        file_path = os.path.join(output_dir, file_name)
         
         with open(file_path, 'w') as f:
             f.write(code)
+            
+        # Register export info
+        export_info = {
+            "class_name": task_name,
+            "export_path": file_path,
+            "module_name": "task"
+        }
+        
+        # Try to get metadata to populate additional fields
+        metadata_key = f"task_metadata_{dataset_name}_{task_name}"
+        try:
+            metadata = object_registry.get(dict, metadata_key)
+            export_info.update({
+                "task_type": metadata.get("task_type"),
+                "entity_table": metadata.get("entity_table"),
+                "target_col": metadata.get("target_col"),
+            })
+        except KeyError:
+            pass
+            
+        object_registry.register(dict, "task_code", export_info, overwrite=True)
         
         logger.info(f"✅ Exported task code to '{file_path}'")
         

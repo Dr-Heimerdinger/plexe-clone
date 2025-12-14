@@ -53,9 +53,9 @@ from torch_frame.data.stats import StatType
 {task_import}
 
 # Import RelBench modeling utilities
-from relbench.modeling.graph import make_pkey_fkey_graph, get_node_train_table_input
-from relbench.modeling.utils import get_stype_proposal
-from relbench.modeling.nn import HeteroEncoder, HeteroGraphSAGE, HeteroTemporalEncoder
+from plexe.relbench.modeling.graph import make_pkey_fkey_graph, get_node_train_table_input
+from plexe.relbench.modeling.utils import get_stype_proposal
+from plexe.relbench.modeling.nn import HeteroEncoder, HeteroGraphSAGE, HeteroTemporalEncoder
 
 # Set random seed for reproducibility
 seed_everything({random_seed})
@@ -540,7 +540,7 @@ def generate_training_script(
     random_seed: int = 42,
 ) -> Dict[str, Any]:
     """
-    Generates a complete GNN training script using relbench.modeling modules.
+    Generates a complete GNN training script using plexe.relbench.modeling modules.
     
     This tool creates a Python script that:
     1. Loads the custom Dataset and Task classes
@@ -550,9 +550,9 @@ def generate_training_script(
     5. Evaluates and saves the best model
     
     Args:
-        dataset_module_path: Path to the dataset module (e.g., "workdir/my_dataset.py")
+        dataset_module_path: Path to the dataset module (e.g., "workdir/dataset.py")
         dataset_class_name: Name of the Dataset class (e.g., "MyCustomDataset")
-        task_module_path: Path to the task module (e.g., "workdir/my_task.py")
+        task_module_path: Path to the task module (e.g., "workdir/task.py")
         task_class_name: Name of the Task class (e.g., "UserLTVTask")
         working_dir: Directory to save outputs (model checkpoints, cache, etc.)
         task_type: Type of task - "regression", "binary_classification", "multiclass_classification"

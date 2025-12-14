@@ -1,0 +1,472 @@
+id,account_id,display_name,location,profile_image_url,website_url,about_me,creation_date
+85141,4828030,Camron_Godbout,"Indian Land, SC, USA",,http://camron.xyz,,2016-07-29 14:44:41.847
+6107,1148595,Taylor,"Virginia, United States",,https://people.virginia.edu/~trb5me,"<p>I'm an assistant professor of statistics at <a href=""https://statistics.as.virginia.edu/"" rel=""nofollow noreferrer"">UVa</a>.</p>
+<p>Grab my code and course materials on <a href=""https://github.com/tbrown122387/"" rel=""nofollow noreferrer"">my Github</a>.</p>
+<p>Buy my book <a href=""https://rads.stackoverflow.com/amzn/click/com/1032203250"" rel=""nofollow noreferrer"" rel=""nofollow noreferrer"">here.</a></p>
+",2012-01-04 21:10:36.243
+255115,11288979,Leafstar,,,,,2020-12-29 03:39:10.707
+254990,16084794,Federico,,,,,2020-12-27 22:52:42.027
+199192,14270254,Thomas Bilach,"New York City, NY, USA",,,"<p>I enjoy discussing new ideas.</p>
+<p>I mainly work with crime and economic data. In particular, I specialize in the design and evaluation of social and government intervention programs. I have a demonstrated history of collaborative research with academics and practitioners in the law enforcement and public health sector. I am an avid R user, but I also work in Python and Stata.</p>
+<p>I also take a special interest in statistical graphics and data visualization.</p>
+<p>&quot;We are what we repeatedly do.&quot;</p>
+",2019-05-04 00:07:24.943
+235220,12563433,Aqee,,,,,2020-05-17 03:07:11.867
+9081,215207,kjetil b halvorsen,Tellus,,,"<p>Mathematical statistician (the image is my grandfather in 1927, just returned to Tromsø after wintering at Jan Mayen)</p>
+<p>For contact, my email:</p>
+<blockquote>
+<pre><code>&lt;first name&gt;&lt;My public seed&gt; at gmail dot com
+</code></pre>
+</blockquote>
+<p>Below a list of some questions I have responded to, where I consider my response  interesting:</p>
+<p><a href=""http://stats.stackexchange.com/questions/191492/how-does-saddlepoint-approximation-work/191781#191781"">how-does-saddlepoint-approximation-work</a></p>
+<p><a href=""https://stats.stackexchange.com/questions/177102/what-is-the-intuition-behind-svd/179042#179042"">what is the intuition behind svd</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/142338/goodness-of-fit-and-which-model-to-choose-linear-regression-or-poisson/142353#142353"">goodness of fit and which model to choose linear regression or poisson</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/123367/estimating-parameters-for-a-binomial/123748#123748"">Estimating parameters for Binomial with both <span class=""math-container"">$n$</span> and <span class=""math-container"">$p$</span> unknown</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/94402/what-is-the-difference-between-finite-and-infinite-variance/100161#100161"">what is the difference between finite and infinite variance</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/72479/general-sum-of-gamma-distributions/137318#137318"">general sum of gamma distributions</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/120776/why-should-we-use-t-errors-instead-of-normal-errors/120787#120787"">why should we use t errors instead of normal errors</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/112451/maximum-likelihood-estimation-mle-in-layman-terms/112480#112480"">maximum likelihood estimation mle in layman terms</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/152850/difference-of-two-i-i-d-lognormal-random-variables/176374#176374"">difference of two iid lognormal random variables</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/131065/non-transitivity-of-correlation-correlations-between-gender-and-brain-size-and/131069#131069"">non transitivity of correlation correlations between gender and brain size</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/188903/intuition-on-the-kullback-leibler-kl-divergence/189758#189758"">Intuition on the Kullback-Leibler divergence</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/35956/taleb-and-the-black-swan/36048#36048"">Taleb and the black swan</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/102778/correlations-between-continuous-and-categorical-nominal-variables/102800#102800"">Correlations between continuous and categorical nominal variables</a></p>
+<p><a href=""http://stats.stackexchange.com/questions/254124/why-does-logistic-regression-become-unstable-when-classes-are-well-separated/254205#254205"">Why does logistic regression become unstable when classes are well separated</a></p>
+",2012-06-09 22:52:37.473
+255298,16646333,Arbab Khalid,,,,,2020-12-31 02:12:06.210
+255233,8996934,S. M. Roch,"Berlin, Deutschland",,,"<p>Studying mathematics in Berlin. Focus on Discrete Mathematics and Algebra.</p>
+",2020-12-30 08:44:12.150
+129041,11545059,elemolotiv,,,,,2017-08-13 21:22:32.133
+205701,16303836,st4co4,,,,,2019-07-12 07:59:43.547
+254875,19924132,GISEnthu,,,,,2020-12-26 07:20:05.307
+255242,14704965,J. Ziegler,,,,,2020-12-30 11:34:42.413
+255147,20322622,Ishan,,,,,2020-12-29 11:43:46.747
+254952,20278353,Filipg,,,,,2020-12-27 12:43:33.093
+234784,17597715,bolleke,,,,,2020-05-13 13:40:30.950
+255226,20328811,DanJDR,,,,,2020-12-30 05:58:25.387
+181884,13477650,aspark2020,,,,,2018-11-27 05:38:04.537
+154739,4841903,Aleksejs Fomins,Zurich,,,"<p>Theoretical Physicist, Mathematician and a computer scientist. I have worked in the areas of Computational Geometry, Optics, High Performance Computing, Quantum Information Theory. Currently doing a PhD in Systems Neuroscience. Current research interests include neural code, exploratory analysis techniques for complex systems, functional connectivity. I like fun physical activity like swimming, bouldering and aikido. I like programming contests. I like cats and dogs and fluffy stuff</p>
+",2018-03-20 12:52:15.910
+16159,2538419,EngrStudent,Midwest USA,,http://mathbaby.blogspot.com/,"<p>Christian.</p>
+<p>Dad of daughters (14yr, 10yr, 4yr, 3yr)</p>
+<p>Husband. (20.7 years) Married to my best friend and an amazing person.</p>
+<p>Nerd.  Former president of Math club. Presented at MathFEST.
+Mechanical Engineer.  Scientist.</p>
+<p>Grew up in the land of rednecks, cactus, and tarantulas.  Now I live in the land of soybeans, corn, and car-racing.</p>
+<p>Nearly no free time, so posting is likely to have intermittency.</p>
+",2013-03-24 16:01:45.153
+13244,1313464,jpmuc,Minga,,,"<p>Continuous effort, not strength or intelligence, is the key to unlocking our potential - Winston Churchill</p>
+",2012-12-17 14:35:13.810
+2269,300140,Greg,Switzerland,,https://www.gregorymermoud.ch,"<p>Distinguished Engineer at Cisco.</p>
+",2011-03-07 15:10:06.550
+35995,4441196,Richard Hardy,Europe,,,"<p>Ph.D., associate professor with work experience in finance.</p>
+<p>Interests: financial econometrics, forecasting, volatility, uncertainty, risk management, model selection and other.</p>
+<p>Can you answer one of <a href=""https://stats.stackexchange.com/search?tab=newest&amp;q=user%3a53690%20is%3aquestion%20answers%3a0"">my questions</a>? That would be great!</p>
+",2014-08-08 10:57:13.613
+255159,11489752,Azer Cabbarli,,,,,2020-12-29 14:40:28.573
+240043,6885505,Daniel R. Collins,"Brooklyn, NY",,http://www.madmath.com,"<p>Lecturer in Mathematics and Computer Science at CUNY/Kingsborough.</p>
+",2020-07-02 21:58:25.523
+255219,20322052,datalover,,,,,2020-12-30 03:30:51.723
+69747,7767983,BigBendRegion,"Brewster County, TX, USA",,https://www.routledge.com/Understanding-Regression-Analysis-A-Conditional-Distribution-Approach/Westfall-Arias/p/book/9780367458522,"<p><a href=""https://rads.stackoverflow.com/amzn/click/com/0367458527"" rel=""nofollow noreferrer"" rel=""nofollow noreferrer"">Westfall, P.H. and Arias. A.L. (2020). Understanding Regression Analysis: A Conditional Distribution Approach, CRC Press, Taylor and Francis Group, Boca Raton (493 pages).</a></p>
+<p><a href=""https://www.taylorfrancis.com/books/mono/10.1201/b14398/understanding-advanced-statistical-methods-peter-westfall-kevin-henning"" rel=""nofollow noreferrer"">Westfall, P.H. and Henning, K.S.S. (2013). Understanding Advanced Statistical Methods, Chapman &amp; Hall/CRC Texts in Statistical Science Series, Boca Raton (543 pages).</a></p>
+<p><a href=""https://sasinstitute.redshelf.com/book/1878709"" rel=""nofollow noreferrer"">Westfall,P., Tobias, R. and Wolfinger, R. (2011). Multiple Comparisons and Multiple Tests Using SAS (2nd Ed.), SAS® Press, Cary, NC.</a></p>
+<p><a href=""https://www.routledge.com/Multiple-Comparisons-Using-R/Bretz-Hothorn-Westfall/p/book/9781584885740?utm_source=cjaffiliates&amp;utm_medium=affiliates&amp;cjevent=8bce1f18839311ec80eb02f70a82b82c"" rel=""nofollow noreferrer"">Bretz, F., Hothorn, T., and Westfall, P. (2010). Multiple Comparisons with R. Chapman and Hall, Boca Raton.</a></p>
+<p><a href=""https://www.wiley.com/en-us/Resampling+Based+Multiple+Testing%3A+Examples+and+Methods+for+p+Value+Adjustment-p-9780471557616"" rel=""nofollow noreferrer"">Westfall,P.H. and Young, S.S.(1993), Resampling-Based Multiple Testing: Examples and Methods for P-Value Adjustment. Wiley, New York.</a></p>
+",2016-02-03 15:03:27.023
+255102,13302146,AJames,,,,,2020-12-29 00:08:08.050
+254769,20292599,user306393,,,,,2020-12-24 13:53:42.650
+192,218520,babelproofreader,,,https://dekalogblog.blogspot.com/,,2010-07-20 13:24:56.240
+246708,19446262,JCunn,,,,,2020-09-22 20:16:25.303
+241161,18382600,Luigi87,,,,,2020-07-15 14:29:00.387
+244871,11816331,Kώστας Κούδας,,,,,2020-08-29 07:51:32.203
+146830,9092988,sonicking,,,,,2018-01-15 23:25:13.373
+255171,20324810,Mavis,,,,,2020-12-29 16:50:43.433
+169239,13960688,ArOk,,,,,2018-07-22 17:42:23.343
+247248,19621655,Nerd,,,,,2020-09-29 14:49:13.740
+235658,7397180,Lakshay Sharma,,,,,2020-05-20 21:15:44.383
+170017,14059403,John L,,,,,2018-07-30 14:24:41.973
+128628,11521300,Ben,"Canberra, Australia",,,"<p>SE: Please <a href=""https://meta.stackexchange.com/questions/336526/"">reinstate and apologise to Monica Cellio</a></p>
+<hr />
+<p>Research Fellow - Australian National University (ANU)</p>
+<p>Honourary Lecturer - University of New South Wales (UNSW)</p>
+<p>Data Scientist and Statistical Consultant</p>
+<hr />
+<p>I enjoy theoretical and applied statistics, data science, machine learning and game theory.  My PhD was in Bayesian statistics but I have done a lot of teaching in classical methods.  I enjoy programming and analysis in R, and love making models and pretty graphs.  I also have broader expertise in economics, philosophy and law.</p>
+",2017-08-10 03:27:26.793
+66869,3069453,Trajan,,,,,2015-12-26 11:43:35.933
+24753,3715402,Aksakal,"VA, United States",,,"<p>I'm fascinated with randomness in all its manifestations from quantum mechanics to quantitative finance.</p>
+",2013-12-11 15:34:17.843
+255117,19683914,sherry xu,,,,,2020-12-29 03:45:24.760
+39005,3874781,ABcDexter,"Himalaya, Sonora, Mexico",,http://anubhav.club/,"<p>A twenty-somethin' man of my own will.</p>
+<p>It's been years of ‘experience’ in learning...</p>
+<p><a href=""https://i.stack.imgur.com/1tbKs.gif"" rel=""nofollow noreferrer""><img src=""https://i.stack.imgur.com/1tbKs.gif"" alt=""Sierpinski!!"" /></a></p>
+<p>You can ping me<a href=""https://i.stack.imgur.com/QgN8w.gif"" rel=""nofollow noreferrer"">,</a> with <a href=""https://www.buymeacoffee.com/anubhavbalo"" rel=""nofollow noreferrer""></a>,
+but remember!</p>
+<h1>#SOreadytoHelp</h1>
+<p><a href=""https://i.stack.imgur.com/58bQL.png"" rel=""nofollow noreferrer""><img src=""https://i.stack.imgur.com/58bQL.png"" alt=""Abcdexter"" /></a><br />
+<a href=""https://saythanks.io/to/abc.de.gen.x%40gmail.com"" rel=""nofollow noreferrer""><img src=""https://img.shields.io/badge/Say%20Thanks-!-1EAEDB.svg"" alt=""Say Thanks!"" /></a>
+<a href=""http://stackexchange.com/users/3874781"">to ABcDexter</a></p>
+",2014-10-12 18:07:21.817
+24715,2242720,Tim,"Warsaw, Poland",,,"<blockquote>
+<p>Before I had studied Chan for thirty years, I saw mountains as
+mountains, and rivers as rivers. When I arrived at a more intimate
+knowledge, I came to the point where I saw that mountains are not
+mountains, and rivers are not rivers. But now that I have got its very
+substance I am at rest. For it's just that I see mountains once again
+as mountains, and rivers once again as rivers.</p>
+</blockquote>
+<p>-- Qingyuan Weixin</p>
+",2013-12-10 21:19:06.223
+115,143307,Suresh Venkatasubramanian,,,,,2010-07-19 21:29:29.273
+221954,17531969,Deno,,,,,2020-01-15 07:04:16.823
+255041,20314675,wholmes57,,,,,2020-12-28 11:11:17.740
+61417,5220009,Magnus,"Stockholm, Sweden",,http://psykad.blogspot.com,"<p>I mainly use this site while studying tough subjects, like mathmatics or statistics. I typically require a very deep understanding of things in order to utilize them. I've found the forum very helpful so far (much more so than the lecturers/literature) and I'm very grateful to the community.</p>
+<p>Oh, and I'm born 1984, I have a degree in political science and I have a weakness for anime songs (currently playing: &quot;be your girl&quot; from Elfen Lied outro)</p>
+",2015-10-13 12:46:30.027
+254734,20288620,gyk,,,,,2020-12-23 23:15:01.067
+255299,4807996,adrienne,,,,,2020-12-31 02:15:04.757
+22,504968,Harvey Motulsky,Santa Monica CA,,http://www.graphpad.com,"<p>I am the founder of <a href=""http://www.graphpad.com"" rel=""nofollow noreferrer"">GraphPad Software</a> and the author of <a href=""http://intuitivebiostatistics.com"" rel=""nofollow noreferrer"">Intuitive Biostatistics</a>.</p>
+",2010-07-19 19:09:32.720
+255105,15310393,ibabinaca,,,,,2020-12-29 01:09:08.177
+47569,1291385,Aliweb,"Victoria, BC",,,"<p>Just a programmer.</p>
+",2015-03-16 16:11:16.683
+51433,2051399,jds,,,,,2015-05-16 11:46:25.580
+75014,8171534,Roger Vadim,France,,,"<p>Physicist and computational-biologist. I am interested in everything related to building mathematical/probabilistic models and real-world data analysis.</p>
+",2016-04-03 11:47:19.310
+166693,13845613,R Carnell,USA,,,"<p>Statistician, Data Scientist, SCOTUS Watcher, Nuclear Engineer, Physicist, part time Computer Scientist, some times Banker + Marketer</p>
+",2018-06-26 13:40:45.750
+109482,7484578,John Kleve,,,,,2017-03-10 23:58:22.243
+80394,8568240,Bernhard,,,,,2016-06-03 14:50:42.593
+255287,20334971,Max,,,,,2020-12-30 22:43:15.697
+25720,2539892,user2205916,,,,,2014-01-12 13:13:57.360
+255261,2855501,piga,"Drage, Croatia",,,,2020-12-30 16:40:15.467
+79126,8463799,Noah,"Cambridge, MA, United States",,https://ngreifer.github.io/,"<p>Statistical consultant and programmer at Harvard IQSS. Author and maintainer of several R packages for causal inference, including <code>MatchIt</code>, <code>WeightIt</code>, and <code>cobalt</code>, among others.</p>
+<p>I have expertise in propensity score methods, matching, causal inference, linear regression, logistic regression, and programming in R.</p>
+",2016-05-19 15:46:14.703
+252107,4020100,fblundun,"London, United Kingdom",,,,2020-11-24 17:55:53.893
+57214,5902228,BruceET,San Francisco Bay Area,,,"<p>Bruce E. Trumbo, 12 December 1937 – 8 July 2022</p>
+<p><a href=""https://www.dignitymemorial.com/obituaries/springfield-il/bruce-trumbo-10852976"" rel=""nofollow noreferrer"">Obituary: Bruce Edward Trumbo</a></p>
+<p><a href=""https://magazine.amstat.org/blog/2022/10/01/obituaries-for-october-2022"" rel=""nofollow noreferrer""><em>AmStat News</em>, Obituaries for October 2022</a></p>
+<hr />
+<p>Professor Emeritus of Statistics and Mathematics. Mid 80s, mainly retired; have recently taught several senior and graduate courses.</p>
+<p>Current academic interests: probability simulation, statistical graphics, nonparametric tests, Bayesian interval estimation.</p>
+",2015-08-11 17:22:01.590
+16043,2523286,Sycorax,"Washington, DC, United States",,,,2013-03-20 23:59:56.610
+243325,16408439,CheeseBurger,,,,,2020-08-10 11:07:53.977
+225131,17794671,CuriousMD,,,,,2020-02-19 02:54:45.547
+30778,3771174,Alexis,,,http://alexisdinno.com,"<p><strong>Alexis Dinno</strong> is a social epidemiologist at the Oregon Health &amp; Science University-Portland State University School of Public Health who geeks out on quantitative methods, including statistical methods.</p>
+",2014-04-22 15:44:33.497
+237981,17054129,jbuddy_13,,,,,2020-06-11 22:43:15.247
+82120,8123414,John Stud,,,,,2016-06-23 15:37:58.440
+255109,382223,vinhcuong,,,,,2020-12-29 01:57:13.047
+255140,5055833,AviFarah,,,,,2020-12-29 10:26:57.703
+136436,6501954,Paul Fornia,,,,,2017-10-15 19:05:48.580
+249015,16314887,Many,,,,,2020-10-19 12:09:29.057
+243014,15447144,Zhiltsoff Igor,"Moscow, Russia",,,"<p>I like <a href=""https://meta.stackoverflow.com/users/12695027/scratte"">Scratte</a>'s &quot;About me&quot;:</p>
+<blockquote>
+<p>Be kind to others.
+Including those that don't &quot;deserve&quot; it.
+They may need it most.</p>
+</blockquote>
+<hr />
+<p>Anyway, <a href=""https://stackoverflow.com/users/2751851/duplode0"">duplode</a> made a list of &quot;canonicals and pseudo-canonicals for <a href=""/questions/tagged/haskell"" class=""post-tag"" title=""show questions tagged &#39;haskell&#39;"" aria-label=""show questions tagged &#39;haskell&#39;"" rel=""tag"" aria-labelledby=""tag-haskell-tooltip-container"">haskell</a>&quot; - you should check it out. I am once again stealing from another person's &quot;About me&quot; and making a list of my favourite posts from all over <a href=""https://stackexchange.com/"">Stack Exchange</a> (yeah, I like some of my own questions; not all of them):</p>
+<ul>
+<li><p><a href=""https://meta.stackoverflow.com/a/399961/11143763""><strong>Meta Stack Overflow, A:</strong> No tool or restriction would help us form the right attitude towards asking good questions within the community. </a></p>
+</li>
+<li><p><a href=""https://meta.stackexchange.com/a/276225/785104""><strong>Meta.SE, A:</strong> Reading a well-structured question is always nice. Writing one is twice as nice. Here is the</a> <a href=""/questions/tagged/markdown"" class=""post-tag"" title=""show questions tagged &#39;markdown&#39;"" aria-label=""show questions tagged &#39;markdown&#39;"" rel=""tag"" aria-labelledby=""tag-markdown-tooltip-container"">markdown</a>.</p>
+</li>
+<li><p><a href=""https://linguistics.stackexchange.com/questions/36362/word-order-in-%d7%91%d7%a8%d7%95%d7%9a-%d7%94%d7%91%d7%90""><strong>Linguistics.SE, Q:</strong> My modest attempt into Hebrew Grammar and Etymology.</a></p>
+</li>
+<li><p><a href=""https://linguistics.stackexchange.com/questions/34456/when-did-hebrew-start-replacing-yiddish""><strong>Linguistics.SE, Q:</strong> A bit more on Hebrew: how Hebrew got bigger than Yiddish.</a></p>
+</li>
+<li><p><a href=""https://languagelearning.stackexchange.com/a/4678/9188""><strong>Language Learning.SE, A:</strong> I simply like Hebrew: &quot;prescriptive&quot; resources for learning Hebrew.</a></p>
+</li>
+<li><p><a href=""https://stackoverflow.com/questions/3870088/a-monad-is-just-a-monoid-in-the-category-of-endofunctors-whats-the-problem""><strong>Stack Overflow, Q:</strong> A monad is just a monoid in the category of endofunctors, what's the problem?</a></p>
+</li>
+<li><p><a href=""https://stackoverflow.com/a/13352580/11143763""><strong>Stack Overflow, A:</strong> Let me throw something serious in here - free monoids and free monads.</a></p>
+</li>
+<li><p><a href=""https://stackoverflow.com/questions/63093464/cases-in-which-we-shall-not-use-monadic-bind-to-write-mfix-down-using-loop""><strong>Stack Overflow, Q:</strong> Having a small bit of fun: checking monadic fix written down with <code>Control.Arrow.loop</code> on extreme cases.</a></p>
+</li>
+<li><p><a href=""https://christianity.stackexchange.com/questions/2337/did-paul-write-the-epistle-to-the-hebrews""><strong>Christianity.SE, Q:</strong> Was Paul the author of Hebrews?</a></p>
+</li>
+<li><p><a href=""https://christianity.stackexchange.com/q/4637/47308""><strong>Christianity.SE, Q:</strong> Kind of related to the first part of my &quot;About me&quot;: the significance of Love.</a></p>
+</li>
+<li><p><a href=""https://stackoverflow.com/questions/63320375/hughes-fibonacci-stream""><strong>Stack Overflow, Q:</strong> Looking for mistakes in one of my favourite papers on</a> <a href=""/questions/tagged/haskell"" class=""post-tag"" title=""show questions tagged &#39;haskell&#39;"" aria-label=""show questions tagged &#39;haskell&#39;"" rel=""tag"" aria-labelledby=""tag-haskell-tooltip-container"">haskell</a>. The paper is John Hughes' famous <a href=""https://www.sciencedirect.com/science/article/pii/S0167642399000234"" rel=""nofollow noreferrer"">&quot;Generalising Arrows to Monads&quot;</a>.</p>
+</li>
+<li><p><a href=""https://economics.stackexchange.com/questions/39131/the-dumping-argument-and-trusts""><strong>Economics.SE, Q:</strong> A question of my own with a one-time negative score I like.</a></p>
+</li>
+</ul>
+<p>Well, I am out of characters now. Might change smth in the future.</p>
+",2020-08-06 06:11:12.510
+211479,7388938,kmf,,,,"<p>Computer Engineering student</p>
+",2019-09-19 18:40:25.213
+254365,19329096,Ele975,,,,,2020-12-20 00:30:55.120
+55621,6646667,Isambard Kingdom,,,,,2015-07-18 14:35:08.257
+252288,14307362,Xu Shan,"Ithaca, 纽约州美国",,,,2020-11-26 16:26:53.157
+185306,4292175,Ben Reiniger,"Chicago, IL, USA",,http://bmreiniger.github.io,"<p>math PhD (research in combinatorics) turned data scientist</p>
+<p>pronouns he/him/his</p>
+",2018-12-31 16:05:50.930
+119922,8893267,The Pointer,,,,,2017-05-30 00:13:41.380
+255101,20319012,Kulamani Sahoo,,,,,2020-12-29 00:07:28.327
+255264,20333226,Nora23,,,,,2020-12-30 17:08:58.043
+226509,15956311,outofthegreen,Brazil,,,"<p>French explorer of Brazil.</p>
+",2020-03-03 20:09:12.017
+2958,393422,cbeleites unhappy with SX,Germany,,,"<p>Analytical chemist, vibrational spectroscopist and chemometrician. </p>
+
+<p>I do professional chemometrics consulting and training as well as chemometric method development and coding: </p>
+
+<p>Claudia Beleites<br>
+Chemometrix GmbH<br>
+Södeler Weg 19<br>
+61200 Wölfersheim<br>
+Germany  </p>
+
+<p>phone:   +49 (15 23) 1 83 74 18<br>
+USt-ID: DE306376280
+email: <strong>claudia (dot) beleites (at) chemometrix (dot) gmbh</strong></p>
+
+<hr>
+
+<p>I maintain the R package <a href=""http://hyperspec.r-forge.r-project.org"" rel=""nofollow noreferrer""><code>hyperSpec</code></a> for handling spectroscopic data sets in <a href=""http://r-project.org"" rel=""nofollow noreferrer"">R</a>.</p>
+",2011-05-13 10:02:56.203
+254634,2949385,Bananeen,USA,,,"<p>Math postdoc. Algebraic Geometry.</p>
+",2020-12-22 23:33:30.903
+157245,4359319,jluchman,"Des Moines, IA, USA",,,"<p>I am a PStat (American Statistical Association) data analyst and PhD behavioral scientist (Industrial Organizational Psychology).</p>
+<p>My statistical and data science interests are in predictor/independent variable/feature importance for many different predictive models (supervised and un-).</p>
+<p>In addition, I have interests in categorical data analysis/classification and data clustering/segmentation.</p>
+<p>I usually program in Stata/Mata as well as R and working knowledge of Python.</p>
+",2018-04-05 23:43:18.630
+255320,20338524,Paco,,,,,2020-12-31 11:49:52.457
+250224,19882303,Ryan Brown,,,,,2020-11-02 18:48:18.500
+47667,1150789,marengz,"Harare, Harare Province, Zimbabwe",,,,2015-03-17 21:44:35.893
+237420,18779222,Gianni D'Adova,,,,,2020-06-06 13:39:52.533
+218101,14141338,Coder,,,,,2019-11-27 19:49:48.060
+255099,20318975,Achintya Agarwal,,,,,2020-12-28 23:56:56.197
+58540,6879499,Erik Ruzek,"Virginia, USA",,https://sites.google.com/view/erikruzek,"<p>BY DAY: Education researcher</p>
+<p>AT ALL TIMES: Dad, husband, friend, nice guy</p>
+<p>HOBBIES: Travel, bicycling, reading, computers and gaming, IPAs and Belgian-style beers, boba tea</p>
+<p>SOFTWARE: <code>R</code>, <code>Stata</code>, <code>Mplus</code>, and <code>MLwiN</code></p>
+",2015-09-01 02:19:22.823
+251402,17069874,curious,,,,,2020-11-16 15:09:12.853
+229148,17890102,MrCrHaM,,,,,2020-03-31 02:46:52.587
+188602,14847110,Robin Liao,,,,,2019-01-31 15:52:31.890
+247117,5122793,Kelvin_neverKnow,,,,"<p>Struggle but interested in math</p>
+",2020-09-28 04:51:38.787
+255106,18921339,dberezin,,,,,2020-12-29 01:36:47.550
+109249,6141771,Dominus,,,,,2017-03-09 11:00:52.027
+2584,245093,Swiss Army Man,,,,,2011-04-12 06:50:06.880
+120720,7195484,Sextus Empiricus,"Sion, Switzerland",,https://www.linkedin.com/in/martijn-weterings-7035609a/,"<p><a href=""https://i.stack.imgur.com/lShkO.jpg"" rel=""nofollow noreferrer""><img src=""https://i.stack.imgur.com/lShkO.jpg"" alt=""i am fit"" /></a></p>
+<p>I am an engineer trained in astronomy (Leiden University) and food technology (Wageningen University).</p>
+<hr />
+<p>I like to answer questions on stats.stackexchange.com, which doesn't directly seem to be my main field, but the applied mathematics is very general.</p>
+<p>In addition, I have learned a lot from spending time on the website, and (to be honest) a lot of my answers depend mostly on research skills.</p>
+<hr />
+<p>Why do I use the nickname &quot;Sextus Empiricus&quot;?</p>
+<p>I originally used my own name, but I changed it into a nickname because of dissatisfaction, with StackExchange management during 2020.</p>
+<p>I chose the name SE because his works are like my bible (my other favorite philosophical writings are from Descartes and Wittgenstein), and because the initials resemble a particular website.</p>
+<p>Currently I slightly regret carrying such a big name as a nickname, but I also see it as fun and try to remain close to his philosophy. I can also be happy that I didn't change my nickname into Ronald Fisher.</p>
+",2017-06-05 10:39:01.763
+255212,16927689,rflmorais,"São Paulo, SP, Brasil",,,"<p><em>I am not a native English speaker so, I apologize in advance if I was rude.
+Please correct me always that you get a chance, you'll be making me a huge favor</em></p>
+",2020-12-30 01:13:16.010
+57794,6808736,plain_vanilla,,,,,2015-08-20 05:26:59.993
+255139,20321970,Sanne Welin,Sweden,,,"<p>I am a full-time high school teacher and part-time student in the field of ecology and conservation.</p>
+",2020-12-29 10:05:04.697
+227871,12189590,AsleepOrDead,,,,,2020-03-18 20:43:21.673
+179252,14669824,spring,,,,,2018-11-02 05:25:54.727
+14355,910818,deemel,Germany,,,"<p>Data scientist, worked in finance and apparel</p>
+",2013-01-29 10:34:07.343
+255143,20322305,tranthanhson5794,,,,,2020-12-29 10:55:21.347
+147017,333309,point618,,,,,2018-01-17 12:01:00.090
+190769,5442600,interoception,,,,,2019-02-19 12:56:11.817
+255108,20319424,Marcelo,,,,,2020-12-29 01:55:23.730
+255186,7950189,Glingol,,,,,2020-12-29 19:35:19.143
+125923,1077515,Igor F.,,,,,2017-07-18 23:26:48.527
+144189,11863068,Seymour,World,,,"<p>Background in Business Management, currently working on my data science thesis to graduate the master in information management.</p>
+<p>My questions are mainly related to R because I am using it for the thesis project.</p>
+<p>Cheers!</p>
+",2017-12-18 17:03:18.013
+253814,20199167,Izzy,,,,,2020-12-13 21:01:10.723
+196216,4883296,cross-entropy,,,,,2019-04-06 18:32:21.347
+37792,4486844,WeakLearner,,,,,2014-09-17 10:04:35.410
+5179,844516,Xi'an,"Paris, France",,http://xianblog.wordpress.com,"<p>I am a professor of Statistics at Université Paris Dauphine (PSL), Paris, France, since 2000, and at University of Warwick, Coventry, United Kingdom, since 2013, a researcher at CREST, Paris-Saclay University, since 1992, a senior member of the Institut Universitaire de France (IUF), between 2010 and 2021, and a pr[AI]rie chair since 2019. My research is focusing on Bayesian statistics, numerical probability applied to simulation methods, and statistical inference with an interest mostly in genetics and astronomy applications. I maintain <a href=""http://xianblog.wordpress.com"" rel=""nofollow noreferrer"">a blog</a> on academic and un-academic topics since 2008.</p>
+<p><strong>0 credit answers:</strong></p>
+<ul>
+<li><a href=""https://stats.stackexchange.com/questions/514543/expanding-conditional-probability-for-gibbs-sampling-with-many-parameters/514594#514594"">Expanding conditional probability for Gibbs sampling with many parameters</a></li>
+<li><a href=""https://stats.stackexchange.com/questions/511536/find-conditional-pmf-of-a-multinomial-distribution/511590#511590"">Find conditional PMF of a multinomial distribution</a></li>
+<li><a href=""https://stats.stackexchange.com/questions/520059/is-it-valid-to-perform-bayesian-optimization-and-mcmc-sampling-with-nested-model/520070#520070"">Is it valid to perform Bayesian optimization and MCMC sampling with nested model parameters?</a></li>
+<li><a href=""https://stats.stackexchange.com/questions/554453/aperiodic-property-and-the-existence-of-limiting-or-stationary-distribution-for/554468#554468"">aperiodic property and the existence of limiting or stationary distribution for Markov chain</a></li>
+<li><a href=""https://stats.stackexchange.com/questions/471546/variance-of-rao-blackwellization-for-mc-estimate-of-expectation/471566#471566"">Variance of Rao Blackwellization for MC Estimate of Expectation</a></li>
+<li><a href=""https://stats.stackexchange.com/questions/506362/how-do-we-define-the-kernel-to-calculate-the-acceptance-ratio-for-metropolis-has/506394#506394"">How do we define the kernel to calculate the acceptance ratio for Metropolis-Hastings Markov Chain Monte Carlo?</a></li>
+</ul>
+<p><strong>Warning:</strong> As an Amazon Associate I earn from qualifying purchases made though <a href=""http://amzn.to/2gQg872"" rel=""nofollow noreferrer"">the links</a> I make to books on that platform.</p>
+",2011-11-05 07:56:15.903
+238585,8403394,BrunoF,Brazil,,https://www.linkedin.com/in/brunofacca,,2020-06-17 17:20:14.173
+69840,7774521,gazza89,"London, UK",,,"<p>Former physicist, no making my way in the world as a data scientist. First principles thinker. Uplift and counterfactual modelling is a particular area of interest/expertise of mine.</p>
+",2016-02-04 12:01:10.833
+20286,3098620,EdM,,,,,2013-07-26 15:11:03.380
+242632,10001004,Serge,,,,,2020-08-01 05:22:58.360
+61691,5990742,couturierc,,,,,2015-10-16 13:06:51.027
+150694,12957255,rempsyc,,,https://remi-theriault.com/,"<p>Check out my <code>rempsyc</code> package!</p>
+<p><a href=""https://rempsyc.remi-theriault.com/"" rel=""nofollow noreferrer"">https://rempsyc.remi-theriault.com/</a></p>
+<p>And also my <code>lavaanExtra</code> package!</p>
+<p><a href=""https://lavaanExtra.remi-theriault.com/"" rel=""nofollow noreferrer"">https://lavaanExtra.remi-theriault.com/</a></p>
+",2018-02-16 01:28:59.473
+196018,5109477,Yandle,,,,,2019-04-04 18:19:30.010
+199619,15896855,Dave,,,,"<p>Links I find helpful:</p>
+<p><strong>Binning Continuous Variables</strong></p>
+<p><a href=""https://stats.stackexchange.com/questions/68834/what-is-the-benefit-of-breaking-up-a-continuous-predictor-variable"">What is the benefit of breaking up a continuous predictor variable?</a></p>
+<p><a href=""https://stats.stackexchange.com/questions/41227/justification-for-low-high-or-tertiary-splits-in-anova/41233#41233"">Justification for low/high or tertiary splits in ANOVA</a></p>
+<p><strong>Class Imbalance</strong></p>
+<p><a href=""https://stats.stackexchange.com/questions/357466/are-unbalanced-datasets-problematic-and-how-does-oversampling-purport-to-he"">Are unbalanced datasets problematic, and (how) does oversampling (purport to) help?</a></p>
+<p><a href=""https://stats.meta.stackexchange.com/questions/6349/profusion-of-threads-on-imbalanced-data-can-we-merge-deem-canonical-any"">Profusion of threads on imbalanced data - can we merge/deem canonical any?</a></p>
+<p><strong>Classification Metrics (Related to Class Imbalance)</strong></p>
+<p><a href=""https://stats.stackexchange.com/questions/312780/why-is-accuracy-not-the-best-measure-for-assessing-classification-models"">Why is accuracy not the best measure for assessing classification models?</a></p>
+<p><a href=""https://stats.stackexchange.com/questions/603663/academic-reference-on-the-drawbacks-of-accuracy-f1-score-sensitivity-and-or-sp"">Academic reference on the drawbacks of accuracy, F1 score, sensitivity and/or specificity</a></p>
+<p><strong>Central Limit Theorem</strong></p>
+<p><a href=""https://stats.stackexchange.com/questions/473455/debunking-wrong-clt-statement"">Debunking wrong CLT statement</a></p>
+<p><strong>Chunk Tests</strong></p>
+<p><a href=""https://stats.stackexchange.com/questions/27429/what-are-chunk-tests"">What are chunk tests?</a></p>
+<p><strong>Deep Learning</strong></p>
+<p><a href=""https://stats.stackexchange.com/questions/271198/convolution-operator-in-cnn-and-how-it-differs-from-feed-forward-nn-operation/409172#409172"">Convolution operator in CNN and how it differs from feed forward NN operation?</a></p>
+<p><strong>Hypothesis Testing</strong></p>
+<p><a href=""https://stats.stackexchange.com/questions/2492/is-normality-testing-essentially-useless"">Is normality testing 'essentially useless'?</a></p>
+<p><a href=""https://stats.stackexchange.com/questions/35470/significance-test-for-large-sample-sizes/602422#602422"">Significance test for large sample sizes</a></p>
+<p><strong>Model Evaluation</strong></p>
+<p><a href=""https://stats.stackexchange.com/a/414350/247274"">Is my model any good, based on the diagnostic metric (<span class=""math-container"">$R^2$</span>/AUC/ accuracy/RMSE etc.) value?</a></p>
+<p><strong><span class=""math-container"">$R^2$</span></strong></p>
+<p><a href=""https://stats.stackexchange.com/q/551915/247274"">Interpreting nonlinear regression <span class=""math-container"">$R^2$</span></a></p>
+<p><a href=""https://stats.stackexchange.com/questions/590199/how-to-motivate-the-definition-of-r2-in-sklearn-metrics-r2-score"">How to motivate the definition of <span class=""math-container"">$R^2$</span> in <code>sklearn.metrics.r2_score</code>?</a></p>
+<p><a href=""https://stats.stackexchange.com/questions/347107/predicted-r-squared/577858#577858"">Predicted R squared</a></p>
+",2019-05-08 13:23:32.777
+0,-1,Community,on the server farm,,http://meta.stackexchange.com/,"<p>Hi, I'm not really a person.</p>
+
+<p>I'm a background process that helps keep this site clean!</p>
+
+<p>I do things like</p>
+
+<ul>
+<li>Randomly poke old unanswered questions every hour so they get some attention</li>
+<li>Own community questions and answers so nobody gets unnecessary reputation from them</li>
+<li>Own downvotes on spam/evil posts that get permanently deleted</li>
+<li>Own suggested edits from anonymous users</li>
+<li><a href=""http://meta.stackexchange.com/a/92006"">Remove abandoned questions</a></li>
+</ul>
+",2010-07-19 06:55:26.860
+254958,20309178,Akshaya Balaji,,,,,2020-12-27 14:52:23.903
+18403,2809410,Michael,,,,,2013-05-28 16:09:37.057
+9483,169656,Franck Dernoncourt,,,http://www.francky.me,"<p><a href=""https://stackexchange.com/users/169656/franck-dernoncourt""><img src=""https://stackexchange.com/users/flair/169656.png"" width=""208"" height=""58"" alt=""profile for Franck Dernoncourt on Stack Exchange, a network of free, community-driven Q&amp;A sites"" title=""profile for Franck Dernoncourt on Stack Exchange, a network of free, community-driven Q&amp;A sites"" /></a></p>
+",2012-07-02 22:18:36.513
+947,509540,Sympa,United States,,http://www.slideshare.net/gaetanlion,"<p>Quantitative professional with expertise in econometrics, statistics, risk management.  For past few years have been engaged in developing and testing econometrics models related to bank's stress testing.</p>
+",2010-09-16 21:32:57.667
+255216,9947173,khajiit,,,,,2020-12-30 03:04:46.447
+255100,20318988,Joseph McDonnell,,,,,2020-12-29 00:00:39.450
+240922,12616498,Graham Wright,,,,,2020-07-13 00:39:30.313
+255208,20327164,ScottM10,,,,,2020-12-29 23:57:19.677
+2872,221664,Siato,"London, UK",,,,2011-05-07 11:13:42.100
+102906,3020105,Paul B. Slater,"Santa Barbara, CA, United States",,,"<p>Research Associate--Kavli Institute for Theoretical Physics, University of California, Santa Barbara</p>
+",2017-01-19 19:01:32.000
+75350,3226756,Demetri Pananos,"Toronto, ON, Canada",,,"<p><strong>If you have further questions about a comment or answer I have posted on your question, please do not email me directly with further questions.  I am happy to privately consult for you for a nominal fee, else all interactions are best left on Cross Validated where future users can benefit from reading our public interactions.</strong></p>
+<p>I hold a Ph.D in Biostatsitics and am a Staff Data Scientist at Zapier where I oversee experimentation.</p>
+",2016-04-06 21:32:38.250
+255194,16192252,Samuel Bowditch,,,,"<p>A student of Mathematical Thynges</p>
+",2020-12-29 20:38:43.693
+199514,15890454,Christian Hennig,"Bologna, Italy",,,"<p>Prof of Statistics, University of Bologna, Italy</p>
+",2019-05-07 15:59:22.940
+66768,4172699,Tor,Oslo,,,,2015-12-23 21:05:45.313
+171258,9104251,Lydia,,,,,2018-08-12 23:20:53.200
+126602,1749543,boomkin,,,,,2017-07-24 13:00:44.530
+255107,1627419,Yosia,,,,,2020-12-29 01:37:30.680
+20473,3083068,Alecos Papadopoulos,,,http://alecospapadopoulos.wordpress.com/,"<p>PhD in Economics with a heavy dose of, and a not-so-secret love for, Econometrics and Statistics. The PhD thesis is a monograph on the Two-tier Stochastic Frontier model/framework, &quot;The Two-tier Stochastic Frontier (2TSF) framework: Theory and Applications, Models and Tools&quot;.</p>
+<p><a href=""https://alecospapadopoulos.wordpress.com/"" rel=""nofollow noreferrer"">https://alecospapadopoulos.wordpress.com/</a></p>
+",2013-08-02 14:24:21.923
+219155,10488496,eonurk,,,https://eonurk.github.io/,"<p>Tell me more about the question.</p>
+",2019-12-09 17:14:21.020
+255278,20334224,user306918,,,,,2020-12-30 19:51:47.687
+136479,11265723,Vincent Pakson,"Cebu City, Central Visayas, Philippines",,,"<p>Loves Data Science!</p>
+",2017-10-16 08:09:49.443
+19001,2087875,shimao,,,,"<p>I am an undergraduate student at CMU</p>
+",2013-06-16 15:24:48.493
+15606,511006,passerby51,,,,,2013-03-09 14:48:58.953
+232778,17260099,hellal skander,,,,,2020-04-27 08:15:31.837
+58559,6876694,sultan,Germany,,,"<p>Interested in Datascience and Machine Learning.</p>
+",2015-09-01 09:21:55.157
+24790,1288345,Isabella Ghement,"Richmond, BC, Canada",,http://www.ghement.ca,"<p>I am an independent statistical consultant and trainer who is passionate about statistics and R programming.</p>
+",2013-12-12 06:44:52.040
+237141,16360741,3michelin,,,,,2020-06-03 19:24:09.677
+64455,2832892,JonaSc,"Edinburgh, UK",,http://www.jonathanschwarz.de/,,2015-11-23 09:02:08.817
+141683,5848560,snowparrot,,,,,2017-11-27 11:32:29.323
+122894,10926292,Łukasz Deryło,"Kraków, Polska",,http://www.lukaszderylo.pl,"<p>Freelance data analyst from Krakow, Poland.</p>
+<p>If any of my answers helped you, please consider <a href=""http://buymeacoffee.com/lukaszderylo"" rel=""nofollow noreferrer"">buying me a coffee</a>.</p>
+",2017-06-22 13:26:37.367
+216426,17074906,Jonas8,,,,,2019-11-11 10:11:08.950
+204258,16205535,Pir,,,,,2019-06-26 03:42:35.470
+14484,1012277,Doug Fir,"San Francisco, CA, USA",,,,2013-02-02 16:44:25.207
+1664,239923,rajah9,"Charlotte, NC, United States",,https://www.linkedin.com/in/rajah-chacko/,"<p>Full-time data scientist and budding quant at a large bank in Charlotte, NC.</p>
+",2010-12-31 14:53:19.110
+6708,1220490,Marco,,,,"<p>A poor ignorant who humbly seeks to learn.</p>
+",2012-02-08 12:23:57.240
+20742,117234,stackoverflowuser2010,,,,,2013-08-12 19:31:16.087
+254239,13857642,Anderson Arroyo,"Madrid, España",,https://www.linkedin.com/in/anderson-arroyo/,"<p>Passionate engineer in the field of business and finance with more than three years of experience whithin the sector. Enthusiasm for facing new challenges and eager and curious to learn.
+Technical experience:
+- R
+- Shiny
+- Rmarkdown
+- VBA
+- Machine learning
+- Data science
+- Credit risk modelling
+- Finance modelling (portfolio forecast, comissions and interest rates forecast, etc.)</p>
+",2020-12-18 08:48:59.157
+211463,9899766,Numbermind,Born and living in Leeds (United Kingdom),,,,2019-09-19 12:43:31.623
+255209,20327258,Adam,,,,,2020-12-30 00:21:09.320
+255189,7324025,mrkkzmnvc,,,,,2020-12-29 20:02:20.300
+184331,14860229,Dmitry,,,,,2018-12-19 09:11:25.413
+86926,7766455,Abiologist,,,,,2016-08-19 21:00:06.783
+56068,4822500,bliswell,"Baltimore, MD",,,"<p>Just a guy.</p>
+",2015-07-25 01:00:31.587
+56490,405312,SorcererofDM,,,,,2015-07-30 20:37:34.827
+35053,3370685,umair durrani,,,,,2014-07-21 20:27:16.437
+234468,556598,Kirsten,"Melbourne, Australia",,https://www.softwarebydesign.com.au/,"<p>Developer: xaf, c#
+Solutions in made to order manufacturing.</p>
+",2020-05-10 21:59:41.760
+252551,20094981,Tiffany Delhomme,,,,,2020-11-30 11:20:56.537
+165989,13803144,Qian ,,,,,2018-06-19 14:40:37.930
+255104,20319217,Cerqueira Nt J. Xavier,,,,,2020-12-29 01:04:05.117
+255290,20335036,Nathan Mills,"Joplin, MO, USA",,,"<p>I am a technical support engineer, managing ATM and transaction processing servers. I am also an avid gamer, especially of flight simulators-- and dabble in making 3D texture and model modification to my favorite games.</p>
+<p>While I am familiar with and understand complex mathematics, I'm not a math major... so I am here to ask questions in order to learn correctly. Forgive my ignorance on the subject at times.</p>
+",2020-12-30 23:00:56.617
+227699,2728300,user2352714,,,,,2020-03-16 20:07:05.767
+154203,5921744,cure,,,,"<p>.</p>
+",2018-03-16 11:43:02.173
+158099,3387323,gunes,"Cambridge, UK",,,"<p>A hobbyist..</p>
+",2018-04-12 10:42:43.307
+7483,139304,Danica,"Vancouver, BC, Canada",,https://djsutherland.ml,"<p>Machine learning faculty at <a href=""https://cs.ubc.ca"" rel=""nofollow noreferrer"">UBC Computer Science</a>.</p>
+",2012-03-19 19:49:40.507
+59440,6562066,Oxonon,,,,,2015-09-14 15:00:34.983
+33473,4629885,Jonathan Bartlett,,,http://www.thestatsgeek.com,"<p>I'm a Reader in Statistics at the University of Bath's Department of Mathematical Sciences.</p>
+<p>I write a statistics blog at <a href=""http://www.thestatsgeek.com"" rel=""nofollow noreferrer"">http://www.thestatsgeek.com</a></p>
+<p>I also maintain with colleagues a website concerning the handling of missing data, <a href=""http://www.missingdata.org.uk"" rel=""nofollow noreferrer"">http://www.missingdata.org.uk</a></p>
+",2014-06-18 13:49:39.953
+255181,14007779,Rajat Aggarwal,"Ludhiana, Punjab, India",,,,2020-12-29 18:51:59.833
+255213,10746671,CircArgs,"-53.0949165, 73.5164664",,,,2020-12-30 01:59:17.603
+12544,980225,Jeremy Miles,"Los Angeles, CA",,http://jeremymiles.co.uk,"<p>Opinions and errors stated here are mine, not my employer's.</p>
+<p>Sometimes I know what I'm talking about. Often I don't.</p>
+",2012-11-21 21:55:31.517
+213075,12383195,Mkch,,,,,2019-10-07 17:45:44.267
+236703,18476889,Bartosz Dawidowski,,,,,2020-05-30 08:02:01.003
+141531,3329585,user27119,,,,,2017-11-26 02:52:22.347
+211,93886,Tal Galili,Israel,,http://www.r-statistics.com,"Statistics, blogging, and the hope for a happy long life.",2010-07-21 07:53:50.990
+106918,3814367,Lucas Roberts,"New York, NY, United States",,https://scholar.google.com/citations?user=_kr2jm8AAAAJ,"<p>I've worked in Banking, Insurance, Retail-Tech, and Ad-Tech space.
+I'm interested in a variety of domains and how the theory of those domains can be brought to bear to solve actual problems for humans.</p>
+",2017-02-20 14:14:01.727
+254711,20287047,Jan,,,,,2020-12-23 17:50:41.683
+62703,2836818,LListhewaytobe,"Portland, OR",,,,2015-10-30 17:02:52.270
+232582,17439986,PaulG,,,,,2020-04-25 17:12:52.860
+35107,4784444,Russ Lenth,"Iowa City, IA, USA",,,,2014-07-22 15:40:09.550
+255103,2289489,impl,,,,"<p>I make companies.</p>
+",2020-12-29 00:47:40.780
+255268,14615547,molocule,,,,,2020-12-30 17:45:51.613
+100031,8889184,steveo'america,wet coats,,,"<p>Just another guy working for a big company.</p>
+",2016-12-20 23:44:58.070

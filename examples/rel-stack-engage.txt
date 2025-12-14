@@ -9,10 +9,4 @@ and involvement. This predictive task serves as a crucial tool in optimizing use
 engaged user base.
 Machine learning task: Binary classification. The label is 1 when a user contributes to the site and 0 otherwise.
 Evaluation metric: Average Precision (AP).
-Here are some examples for the training table:
-timestamp,OwnerUserId,contribution,
-2012-01-12,352,1
-2010-10-14,7,1
-You should using GNN solution. Max solution is 1. We will build a graph structure consisting of User and Post entities, extracted from the users and posts tables, respectively. The relationships (Edges) between these entities are defined based on foreign keys to capture specific interactions: the writes relationship connects users to posts; comments_on and votes_on represent interactions through comments and votes; edits reflects editorial contributions from the post_history table; and links_to describes semantic relationships between posts from post_links.
-Regarding the input features (Node Features), for User, we use creation_date to model seniority, location for geography, and reputation as a measure of expertise. For Post, creation_date is used for time-attenuated weighting, post_type_id is used for question/answer classification, tags are multi-hot encoded for topic modeling, and text content (title, body) will be generated embeddings (e.g. via BERT) for semantic enrichment. Finally, timestamps (creation_date) in interaction tables serve as essential edge features, which help to filter data strictly before the cutoff time to prevent data leakage.
-please proceed.
+I don't have any requirements, if you need them you can set by default automatically.

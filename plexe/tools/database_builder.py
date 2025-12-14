@@ -294,6 +294,7 @@ def validate_database_code(code: str) -> Dict[str, Any]:
     
     return {
         "valid": len(errors) == 0,
+        "status": "valid" if len(errors) == 0 else "invalid",
         "errors": errors,
         "warnings": warnings
     }
@@ -377,7 +378,14 @@ def export_database_code(
             try:
                 output_dir = object_registry.get(str, "working_dir")
             except KeyError:
-                output_dir = ".workdir"  # Fallback to hidden dir
+                try:
+                    output_dir = object_registry.get(str, "current_chat_session_dir")
+                except KeyError:
+                    # Create new session directory
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                    output_dir = f".workdir/chat-session-{timestamp}"
+                    object_registry.register(str, "current_chat_session_dir", output_dir, overwrite=True)
         
         # Get the code
         code_key = f"database_code_{dataset_name}"
@@ -394,11 +402,19 @@ def export_database_code(
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
         # Write the file
-        file_name = f"{dataset_name}_dataset.py"
+        file_name = "dataset.py"
         file_path = os.path.join(output_dir, file_name)
         
         with open(file_path, 'w') as f:
             f.write(code)
+            
+        # Register export info
+        export_info = {
+            "class_name": dataset_name, # Best guess, usually matches
+            "export_path": file_path,
+            "module_name": "dataset"
+        }
+        object_registry.register(dict, "database_code", export_info, overwrite=True)
         
         logger.info(f"✅ Exported database code to '{file_path}'")
         
