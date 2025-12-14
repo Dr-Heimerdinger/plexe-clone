@@ -372,6 +372,13 @@ def export_database_code(
     try:
         object_registry = ObjectRegistry()
         
+        # If output_dir is default, try to get from registry
+        if output_dir == "workdir":
+            try:
+                output_dir = object_registry.get(str, "working_dir")
+            except KeyError:
+                output_dir = ".workdir"  # Fallback to hidden dir
+        
         # Get the code
         code_key = f"database_code_{dataset_name}"
         try:

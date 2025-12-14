@@ -60,7 +60,8 @@ class ModelBuilder:
     def _create_working_dir() -> str:
         """Create unique working directory for this build."""
         run_id = f"run-{datetime.now().isoformat()}".replace(":", "-").replace(".", "-")
-        working_dir = f"./workdir/{run_id}/"
+        # Use a hidden directory to prevent file watchers from triggering reloads
+        working_dir = f"./.workdir/{run_id}/"
         os.makedirs(working_dir, exist_ok=True)
         return working_dir
 

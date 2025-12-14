@@ -847,12 +847,15 @@ def export_task_code(
         if output_dir is None:
             # Try to get existing session directory from registry
             try:
-                output_dir = object_registry.get(str, "current_chat_session_dir")
+                output_dir = object_registry.get(str, "working_dir")
             except KeyError:
-                # Create new session directory
-                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-                output_dir = f"workdir/chat-session-{timestamp}"
-                object_registry.register(str, "current_chat_session_dir", output_dir, overwrite=True)
+                try:
+                    output_dir = object_registry.get(str, "current_chat_session_dir")
+                except KeyError:
+                    # Create new session directory
+                    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                    output_dir = f".workdir/chat-session-{timestamp}"
+                    object_registry.register(str, "current_chat_session_dir", output_dir, overwrite=True)
         
         # Create tasks subdirectory
         tasks_dir = os.path.join(output_dir, "tasks")

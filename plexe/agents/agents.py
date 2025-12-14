@@ -22,6 +22,7 @@ from plexe.agents.schema_resolver import SchemaResolverAgent
 from plexe.agents.relational_graph_architect import RelationalGraphArchitectAgent
 from plexe.agents.relational_gnn_specialist import RelationalGNNSpecialistAgent
 from plexe.agents.dataset_builder import DatasetBuilderAgent
+from plexe.agents.task_builder import TaskBuilderAgent
 from plexe.config import config
 from plexe.core.object_registry import ObjectRegistry
 from plexe.internal.models.entities.artifact import Artifact
@@ -198,6 +199,13 @@ class PlexeAgent:
             chain_of_thought_callable=self.chain_of_thought_callable,
         ).agent
 
+        # Create Task Builder Agent - builds RelBench Tasks
+        self.task_builder_agent = TaskBuilderAgent(
+            model_id=self.ml_engineer_model_id,
+            verbose=verbose,
+            chain_of_thought_callable=self.chain_of_thought_callable,
+        ).agent
+
         # Define managed agents
         managed_agents = [
             self.eda_agent,
@@ -211,6 +219,7 @@ class PlexeAgent:
             self.relational_graph_architect_agent,
             self.relational_gnn_specialist_agent,
             self.dataset_builder_agent,
+            self.task_builder_agent,
         ]
 
         # Create orchestrator agent - coordinates the workflow

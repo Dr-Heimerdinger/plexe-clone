@@ -222,7 +222,8 @@ def initiate_model_build(
 
         # Create unique working directory for each run to prevent data loss
         run_timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        working_dir = f"./workdir/chat-session-{run_timestamp}/"
+        # Use a hidden directory to prevent file watchers from triggering reloads
+        working_dir = f"./.workdir/chat-session-{run_timestamp}/"
 
         model_builder = ModelBuilder(
             provider=ProviderConfig(

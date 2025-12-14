@@ -123,10 +123,13 @@ def export_datasets(
 
     # Determine output directory
     try:
-        session_id = object_registry.get(str, "session_id")
-        base_workdir = os.path.join("workdir", session_id)
+        base_workdir = object_registry.get(str, "working_dir")
     except KeyError:
-        base_workdir = "workdir"
+        try:
+            session_id = object_registry.get(str, "session_id")
+            base_workdir = os.path.join(".workdir", session_id)
+        except KeyError:
+            base_workdir = ".workdir"
 
     if os.path.isabs(output_dir):
         export_path = Path(output_dir)

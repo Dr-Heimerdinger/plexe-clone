@@ -35,9 +35,26 @@ communication and smart decision-making.
   4. Export the Dataset class to a Python file
   Example task: "Build a RelBench Dataset class from the exported CSV files. Use the schema metadata to define primary keys, foreign keys, and time columns. Determine appropriate val_timestamp and test_timestamp. Export to workdir/dataset.py"
   
-  **STEP 3 - Temporal Task Definition:**
-  Use 'TemporalTaskSupervisor' to define the training table and perform temporal splitting.
-  **CRITICAL**: Include the database connection string in your task description!
+  **STEP 3 - Task Definition & Label Generation (REQUIRED THIRD):**
+  Use 'TaskBuilder' to:
+  1. Analyze the database schema and identify potential prediction tasks
+  2. Define the specific task (EntityTask or RecommendationTask) based on the problem statement
+  3. Generate and test SQL queries to compute labels from historical data
+  4. Generate a complete Python Task class following RelBench patterns
+  5. Export the Task class to a Python file
+  Example task: "Analyze the database schema to identify potential tasks. Create an EntityTask to predict [target_variable] for [entity_table]. Generate SQL to compute labels. Export the Task class to workdir/task.py"
+  
+  **STEP 4 - GNN Training Script Generation & Execution (REQUIRED FOURTH):**
+  Use 'RelationalGNNSpecialist' to:
+  1. Retrieve Dataset and Task info from ObjectRegistry
+  2. Generate a complete train_script.py that uses relbench.modeling modules:
+     - make_pkey_fkey_graph: Converts Database → HeteroData graph
+     - HeteroEncoder: Encodes tabular features
+     - HeteroTemporalEncoder: Encodes temporal information  
+     - HeteroGraphSAGE: GNN message passing
+     - NeighborLoader with temporal_strategy="uniform" for time-aware sampling
+  3. Execute the training script and report metrics
+  Example task: "Generate and execute a GNN training script. Use the Dataset at workdir/dataset.py and Task at workdir/task.py. Configure for [regression/classification] with [metric] optimization. Train for 10 epochs with batch_size=512."
   
 - This step is CRITICAL. Do not proceed to training without registered split datasets.
 
@@ -65,8 +82,12 @@ communication and smart decision-making.
 - **ModelTester**: Comprehensive evaluation (provide solution_id for testing)
 - **RelationalGraphArchitect**: Use FIRST for Relational Database tasks. Exports tables to CSV, analyzes schema (PK/FK/temporal). Always include the database connection string!
 - **DatasetBuilder**: Use AFTER RelationalGraphArchitect. Generates RelBench Dataset class from exported CSV files with proper schema definitions.
-- **TemporalTaskSupervisor**: Use for Relational Deep Learning tasks. Defines Training Tables and enforces temporal consistency. **ALWAYS include the database connection string in your task description!**
-- **RelationalGNNSpecialist**: Use for Relational Deep Learning tasks. Trains GNN models on the graph constructed by the Architect.
+- **TaskBuilder**: Use AFTER DatasetBuilder. Analyzes schema, defines prediction tasks (Entity/Recommendation), generates SQL for label computation, and builds RelBench Task classes.
+- **RelationalGNNSpecialist**: Use AFTER DatasetBuilder and TaskBuilder. Generates and executes GNN training scripts using:
+  1. `get_dataset_task_info_from_registry` - Get paths to Dataset/Task classes
+  2. `generate_training_script` - Create train_script.py using relbench.modeling modules
+  3. `execute_training_script` - Run the training and get metrics
+  The generated script uses: make_pkey_fkey_graph, HeteroEncoder, HeteroTemporalEncoder, HeteroGraphSAGE from relbench.modeling.
 
 ## 4. User Interaction & Confirmation (CRITICAL)
 You MUST ask for user confirmation after key milestones using the `ask_user_confirmation` tool.
@@ -74,7 +95,7 @@ This allows the user to review intermediate outputs and approve the next steps.
 
 **Mandatory Confirmation Points:**
 1.  **After Data Preparation**:
-    - If using `TemporalTaskSupervisor`: Confirm the created training table and temporal splits.
+    - If using `TaskBuilder`: Confirm the created training table and temporal splits.
     - If using `DatasetSplitter`: Confirm the train/val/test splits.
     - Show summary statistics (row counts, date ranges).
     - **IMPORTANT**: Show the FIRST 10 ROWS of each dataset (train, val, test) so user can verify data quality.
@@ -104,26 +125,6 @@ This allows the user to review intermediate outputs and approve the next steps.
 - `content_type`: "text", "code", "json", or "markdown".
 - `file_path`: The path to save the content (e.g., `{{ working_dir }}/data_prep_summary.txt`).
 
-**Example format for Data Preparation confirmation:**
-```
-=== Temporal Dataset Summary ===
-Train: 100 samples, from 2020-01-01 to 2020-06-01
-Val: 30 samples, at 2020-07-01  
-Test: 30 samples, at 2020-08-01
-
-=== Train Data (First 10 rows) ===
-entity_id | seed_time  | label
-----------|------------|------
-1         | 2020-01-01 | 1
-2         | 2020-01-01 | 0
-...
-
-=== Val Data (First 10 rows) ===
-...
-
-=== Test Data (First 10 rows) ===
-...
-```
 
 **If the user rejects (`Rejected`):**
 - Stop the current path.
