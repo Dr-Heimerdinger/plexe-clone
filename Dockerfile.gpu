@@ -1,55 +1,95 @@
-# GPU-enabled Dockerfile for Training
-# Uses CUDA-enabled PyTorch wheels
-# Use this for training with: docker compose -f docker-compose.gpu.yml up --build
-
-FROM python:3.11-slim as base
-
+FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
-
-ENV PIP_DEFAULT_TIMEOUT=100 \
-    PIP_RETRIES=5 \
-    PYTHONUNBUFFERED=1 \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false
-
-# Install system dependencies
-# build-essential is often needed for compiling some python packages
+ 
+# ----------------------------
+# System dependencies
+# ----------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3.11-venv \
+    python3-pip \
     git \
     curl \
     build-essential \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-FROM base as deps
-
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir poetry
-
+ 
+# ----------------------------
+# Install uv (fast Python package manager)
+# ----------------------------
+RUN pip install --no-cache-dir uv
+ 
+# ----------------------------
+# Environment variables
+# ----------------------------
+ENV PYTHONUNBUFFERED=1 \
+    PIP_DEFAULT_TIMEOUT=100 \
+    PIP_RETRIES=5 \
+    UV_SYSTEM_PYTHON=1 \
+    UV_NO_CACHE=1
+ 
+# ----------------------------
+# BƯỚC 1: Copy dependency files
+# ----------------------------
 COPY pyproject.toml poetry.lock* README.md ./
-
-# Install main dependencies via Poetry
-# We exclude the chatui extras initially to keep it focused on ML/Training, 
-# but can add them if needed.
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi --no-root --only main --extras chatui
-
-# Force install torch CUDA version (2.3.0 for CUDA 12.1)
-# We uninstall the poetry-installed torch first just in case
-RUN pip uninstall -y torch && \
-    pip install torch==2.3.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Install PyG dependencies with CUDA support
-RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
-
-FROM deps as app
-
+ 
+# ----------------------------
+# BƯỚC 2: Migrate from Poetry to native uv format
+# ----------------------------
+RUN uvx migrate-to-uv
+ 
+# ----------------------------
+# BƯỚC 3: Install dependencies với uv (sử dụng uv.lock sau migration)
+# ----------------------------
+RUN uv sync --no-dev --extra chatui || uv pip install \
+        python-dotenv pandas imbalanced-learn pydantic scikit-learn seaborn \
+        dataclasses-json bandit joblib mlxtend xgboost tenacity pyarrow \
+        litellm statsmodels hypothesis "numpy<2.0.0" black jinja2 platformdirs \
+        "ray>=2.9.0" rich smolagents deprecated python-multipart psycopg2-binary \
+        featuretools sqlalchemy pytorch-frame pooch duckdb scipy \
+        fastapi "uvicorn[standard]" websockets
+ 
+# ----------------------------
+# BƯỚC 4: Cài torchvision, torchaudio (torch đã có sẵn từ base image)
+# ----------------------------
+RUN uv pip install torchvision torchaudio
+ 
+# ----------------------------
+# BƯỚC 5: PyTorch Geometric dependencies (dùng pip vì PyG wheel index)
+# Theo hướng dẫn chính thức: https://pytorch-geometric.readthedocs.io
+# ----------------------------
+RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv \
+    -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
+ 
+# ----------------------------
+# BƯỚC 6: torch-geometric
+# ----------------------------
+RUN uv pip install torch-geometric
+ 
+# ----------------------------
+# BƯỚC 7: MLflow
+# ----------------------------
+RUN uv pip install "mlflow>=2.14.0,<3.0.0"
+ 
+# ----------------------------
+# Source code
+# ----------------------------
 COPY . .
-
-# Install the project itself
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi --only main --extras chatui
-
-# Verify GPU availability
-RUN python -c "import torch; print(f'Torch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
-
-CMD ["uvicorn", "plexe.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ 
+# ----------------------------
+# Sanity check
+# ----------------------------
+RUN python - <<EOF
+import torch
+print("✓ Python OK")
+print("✓ Torch:", torch.__version__)
+print("✓ CUDA available:", torch.cuda.is_available())
+import torch_geometric
+print("✓ PyG OK")
+import mlflow
+print("✓ MLflow:", mlflow.__version__)
+EOF
+ 
+CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "plexe"]
