@@ -38,6 +38,22 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
         self._lock = threading.Lock()
         self._pending_confirmations = {}
         self._confirmation_results = {}
+        self._closed = False
+
+    def close(self):
+        """Mark the WebSocket as closed to prevent further sends."""
+        with self._lock:
+            self._closed = True
+            # Release any waiting confirmation requests
+            for request_id, event in self._pending_confirmations.items():
+                self._confirmation_results[request_id] = False
+                event.set()
+
+    @property
+    def is_closed(self) -> bool:
+        """Check if the WebSocket emitter has been closed."""
+        with self._lock:
+            return self._closed
 
     def set_loop(self, loop):
         """Set the event loop to use for sending messages."""
@@ -53,8 +69,13 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
             content_type: Type of content (text, code, json, markdown)
             
         Returns:
-            bool: True if confirmed, False otherwise
+            bool: True if confirmed, False if denied or connection closed
         """
+        # If already closed, return False immediately
+        if self.is_closed:
+            logger.debug("WebSocketEmitter: Cannot request confirmation - connection closed")
+            return False
+            
         request_id = str(uuid.uuid4())
         event = threading.Event()
         
@@ -119,6 +140,11 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
 
     def _emit_payload(self, payload: dict):
         """Internal helper to send payload via WebSocket."""
+        # Check if the emitter has been closed
+        if self.is_closed:
+            logger.debug("WebSocketEmitter: Skipping send - connection closed")
+            return
+            
         try:
             # Try to send the message
             # First, check if we're in the same thread as the event loop
@@ -150,7 +176,9 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
         try:
             future.result()  # This will raise if there was an error
         except Exception as e:
-            logger.error(f"Failed to send WebSocket message: {e}")
+            # Mark as closed on send failure to prevent further attempts
+            self.close()
+            logger.debug(f"WebSocket send failed, connection marked as closed: {e}")
 
     async def _send_message(self, payload: dict) -> None:
         """
@@ -159,8 +187,13 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
         Args:
             payload: The message payload to send
         """
+        if self.is_closed:
+            return
+            
         try:
             await self.websocket.send_json(payload)
         except Exception as e:
-            logger.error(f"Failed to send WebSocket message: {e}")
+            # Mark as closed on send failure to prevent further attempts
+            self.close()
+            logger.debug(f"WebSocket send failed, connection marked as closed: {e}")
 

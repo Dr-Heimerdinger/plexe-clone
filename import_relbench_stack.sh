@@ -9,7 +9,7 @@ set -e
 CONTAINER_NAME="plexe-clone-postgres-1"
 DB_NAME="stack"
 DB_USER="mlflow"
-CSV_SOURCE="/mnt/c/Users/TuanAnh/Downloads"
+CSV_SOURCE="/home/ta/kl/plexe-clone/data/database"
 
 echo "========================================="
 echo "RelBench Stack Import - Pure SQL"

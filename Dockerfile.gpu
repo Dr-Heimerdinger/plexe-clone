@@ -36,14 +36,9 @@ ENV PYTHONUNBUFFERED=1 \
 COPY pyproject.toml poetry.lock* README.md ./
  
 # ----------------------------
-# BƯỚC 2: Migrate from Poetry to native uv format
+# BƯỚC 2: Install dependencies với uv (cài trực tiếp để đảm bảo đầy đủ)
 # ----------------------------
-RUN uvx migrate-to-uv
- 
-# ----------------------------
-# BƯỚC 3: Install dependencies với uv (sử dụng uv.lock sau migration)
-# ----------------------------
-RUN uv sync --no-dev --extra chatui || uv pip install \
+RUN uv pip install \
         python-dotenv pandas imbalanced-learn pydantic scikit-learn seaborn \
         dataclasses-json bandit joblib mlxtend xgboost tenacity pyarrow \
         litellm statsmodels hypothesis "numpy<2.0.0" black jinja2 platformdirs \
@@ -52,24 +47,24 @@ RUN uv sync --no-dev --extra chatui || uv pip install \
         fastapi "uvicorn[standard]" websockets
  
 # ----------------------------
-# BƯỚC 4: Cài torchvision, torchaudio (torch đã có sẵn từ base image)
+# BƯỚC 3: Cài torchvision, torchaudio (torch đã có sẵn từ base image)
 # ----------------------------
 RUN uv pip install torchvision torchaudio
  
 # ----------------------------
-# BƯỚC 5: PyTorch Geometric dependencies (dùng pip vì PyG wheel index)
+# BƯỚC 4: PyTorch Geometric dependencies (dùng pip vì PyG wheel index)
 # Theo hướng dẫn chính thức: https://pytorch-geometric.readthedocs.io
 # ----------------------------
 RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv \
     -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
  
 # ----------------------------
-# BƯỚC 6: torch-geometric
+# BƯỚC 5: torch-geometric
 # ----------------------------
 RUN uv pip install torch-geometric
  
 # ----------------------------
-# BƯỚC 7: MLflow
+# BƯỚC 6: MLflow
 # ----------------------------
 RUN uv pip install "mlflow>=2.14.0,<3.0.0"
  
@@ -79,17 +74,21 @@ RUN uv pip install "mlflow>=2.14.0,<3.0.0"
 COPY . .
  
 # ----------------------------
-# Sanity check
+# Sanity check (build-time - GPU not available during build)
 # ----------------------------
 RUN python - <<EOF
 import torch
 print("✓ Python OK")
 print("✓ Torch:", torch.__version__)
-print("✓ CUDA available:", torch.cuda.is_available())
+print("  Note: CUDA will be available at runtime, not during build")
 import torch_geometric
 print("✓ PyG OK")
 import mlflow
 print("✓ MLflow:", mlflow.__version__)
+import deprecated
+print("✓ deprecated OK")
+from plexe import Model
+print("✓ plexe import OK")
 EOF
  
 CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "plexe"]

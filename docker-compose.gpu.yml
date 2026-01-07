@@ -48,6 +48,8 @@ services:
     build:
       context: ./plexe/ui/frontend
       dockerfile: Dockerfile.dev
+    depends_on:
+      - backend
     volumes:
       - ./plexe/ui/frontend/src:/app/src
       - ./plexe/ui/frontend/index.html:/app/index.html
@@ -56,7 +58,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:8000}
+      # Use 'backend' as the host for Docker inter-container communication
+      VITE_BACKEND_HOST: backend
+      # Don't set VITE_BACKEND_URL so frontend uses same-origin and goes through Vite proxy
     networks:
       - plexe-net
 

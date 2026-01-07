@@ -211,10 +211,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {session_id}")
+        # Mark emitter as closed to stop sending messages
+        ws_emitter.close()
         if agent_task:
             agent_task.cancel()
     except Exception as e:
         logger.error(f"WebSocket error for session {session_id}: {e}")
+        # Mark emitter as closed to stop sending messages
+        ws_emitter.close()
         if agent_task:
             agent_task.cancel()
         try:
@@ -222,6 +226,8 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception:
             pass # Connection might be already closed
     finally:
+        # Ensure emitter is closed
+        ws_emitter.close()
         # Remove log handler
         for logger_name in loggers_to_capture:
             logging.getLogger(logger_name).removeHandler(log_handler)

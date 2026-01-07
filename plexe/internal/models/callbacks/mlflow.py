@@ -69,9 +69,11 @@ class MLFlowCallback(Callback):
                 mlflow.set_experiment(experiment_id=self.experiment_id)
 
             # Enable autologging for smolagents AFTER setting experiment
+            # Note: mlflow.smolagents may not be available in all mlflow versions
             try:
                 mlflow.smolagents.autolog()
-            except ModuleNotFoundError:
+            except (ModuleNotFoundError, AttributeError):
+                # smolagents integration not available in this mlflow version
                 pass
 
         except Exception as e:
