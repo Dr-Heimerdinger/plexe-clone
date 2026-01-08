@@ -62,9 +62,14 @@ RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_co
 # BƯỚC 5: torch-geometric
 # ----------------------------
 RUN uv pip install torch-geometric
- 
+
 # ----------------------------
-# BƯỚC 6: MLflow
+# BƯỚC 6: sentence-transformers (for text embeddings in GNN training)
+# ----------------------------
+RUN uv pip install sentence-transformers
+
+# ----------------------------
+# BƯỚC 7: MLflow
 # ----------------------------
 RUN uv pip install "mlflow>=2.14.0,<3.0.0"
  
@@ -83,6 +88,8 @@ print("✓ Torch:", torch.__version__)
 print("  Note: CUDA will be available at runtime, not during build")
 import torch_geometric
 print("✓ PyG OK")
+import sentence_transformers
+print("✓ sentence-transformers:", sentence_transformers.__version__)
 import mlflow
 print("✓ MLflow:", mlflow.__version__)
 import deprecated

@@ -17,6 +17,18 @@ def _get_working_dir() -> str:
         return "./workdir/"
 
 
+def _clean_agent_response_prefix(content: str) -> str:
+    """
+    Remove smolagents managed agent response prefix from content.
+    This prefix is added by the framework when returning results from managed agents.
+    """
+    import re
+    # Pattern to match "Here is the final answer from your managed agent 'AgentName':"
+    pattern = r"^Here is the final answer from your managed agent '[^']+':[\s]*"
+    cleaned = re.sub(pattern, "", content, flags=re.MULTILINE)
+    return cleaned.strip()
+
+
 @tool
 def save_to_workdir(filename: str, content: str, subfolder: str = "") -> str:
     """
@@ -40,6 +52,10 @@ def save_to_workdir(filename: str, content: str, subfolder: str = "") -> str:
             save_dir = working_dir
             
         os.makedirs(save_dir, exist_ok=True)
+        
+        # Clean agent response prefix for Python files to prevent syntax errors
+        if filename.endswith('.py'):
+            content = _clean_agent_response_prefix(content)
         
         file_path = os.path.join(save_dir, filename)
         with open(file_path, "w") as f:

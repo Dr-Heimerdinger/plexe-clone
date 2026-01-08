@@ -466,22 +466,47 @@ if __name__ == "__main__":
 
 GLOVE_TEXT_EMBEDDER = '''
 from typing import List, Optional
-from sentence_transformers import SentenceTransformer
 from torch import Tensor
+
+# Try to import sentence_transformers, fall back to simple embedder if not available
+_SENTENCE_TRANSFORMERS_AVAILABLE = False
+try:
+    from sentence_transformers import SentenceTransformer
+    _SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    print("WARNING: sentence_transformers not installed. Using fallback text embedder.")
+    print("For better text embeddings, install: pip install sentence-transformers")
 
 
 class GloveTextEmbedding:
-    """GloVe-based text embedder using sentence-transformers."""
+    """GloVe-based text embedder using sentence-transformers with fallback."""
     
     def __init__(self, device: Optional[torch.device] = None):
-        self.model = SentenceTransformer(
-            "sentence-transformers/average_word_embeddings_glove.6B.300d",
-            device=device,
-        )
+        self.device = device
+        if _SENTENCE_TRANSFORMERS_AVAILABLE:
+            self.model = SentenceTransformer(
+                "sentence-transformers/average_word_embeddings_glove.6B.300d",
+                device=device,
+            )
+            self.embedding_dim = 300
+        else:
+            self.model = None
+            self.embedding_dim = 64  # Fallback dimension
+            print("Using random embeddings as fallback (not recommended for production)")
 
     def __call__(self, sentences: List[str]) -> Tensor:
-        # Encode and ensure float32 tensor
-        return torch.from_numpy(self.model.encode(sentences)).float()
+        if self.model is not None:
+            # Use sentence-transformers
+            return torch.from_numpy(self.model.encode(sentences)).float()
+        else:
+            # Fallback: simple hash-based embeddings (deterministic but basic)
+            embeddings = []
+            for sentence in sentences:
+                # Create a deterministic embedding based on string hash
+                torch.manual_seed(hash(sentence) % (2**32))
+                emb = torch.randn(self.embedding_dim)
+                embeddings.append(emb)
+            return torch.stack(embeddings).float()
 '''
 
 GLOVE_TEXT_EMBEDDER_CONFIG = '''
@@ -709,6 +734,61 @@ from {dataset_module} import {dataset_class_name}
 # Tool: Execute Training Script
 # =============================================================================
 
+def _normalize_script_path(script_path: str) -> str:
+    """
+    Normalize the script path to handle various input formats.
+    
+    Handles cases like:
+    - Absolute paths: /app/.workdir/...
+    - Relative paths: ./.workdir/... or .workdir/...
+    - Just filename: train_script.py
+    - Paths with redundant components: /app/.workdir/..././.workdir/...
+    """
+    # First, normalize the path to remove redundant separators and up-references
+    script_path = os.path.normpath(script_path)
+    
+    # If path exists as-is, return it
+    if os.path.exists(script_path):
+        return os.path.abspath(script_path)
+    
+    # Try getting working_dir from registry
+    try:
+        object_registry = ObjectRegistry()
+        working_dir = object_registry.get(str, "working_dir")
+        working_dir = os.path.abspath(working_dir)
+        
+        # Extract just the filename
+        filename = os.path.basename(script_path)
+        
+        # Try in working_dir
+        potential_path = os.path.join(working_dir, filename)
+        if os.path.exists(potential_path):
+            return potential_path
+        
+        # If script_path contains a session folder, try to extract it
+        # e.g., ".workdir/chat-session-xxx/train_script.py" -> use that session folder
+        path_parts = script_path.replace("\\", "/").split("/")
+        for i, part in enumerate(path_parts):
+            if part.startswith("chat-session-") or part.startswith("session-"):
+                # Reconstruct path from this point
+                session_path = os.path.join(working_dir, *path_parts[i:])
+                if os.path.exists(session_path):
+                    return session_path
+                # Also try just the session folder with filename
+                session_folder = os.path.join(working_dir, "..", part)
+                session_folder = os.path.normpath(session_folder)
+                if os.path.isdir(session_folder):
+                    potential = os.path.join(session_folder, filename)
+                    if os.path.exists(potential):
+                        return potential
+                        
+    except Exception:
+        pass
+    
+    # Return original (will fail but with proper error message)
+    return script_path
+
+
 @tool
 def execute_training_script(
     script_path: str,
@@ -731,27 +811,33 @@ def execute_training_script(
     import subprocess
     
     try:
-        # Resolve path if it doesn't exist
+        # Normalize and resolve the script path
+        script_path = _normalize_script_path(script_path)
+        
         if not os.path.exists(script_path):
-            # Try looking in working_dir from registry
+            # Provide helpful error message with debugging info
             try:
                 object_registry = ObjectRegistry()
                 working_dir = object_registry.get(str, "working_dir")
-                potential_path = os.path.join(working_dir, os.path.basename(script_path))
-                if os.path.exists(potential_path):
-                    script_path = potential_path
             except Exception:
-                pass
+                working_dir = "unknown"
                 
-        if not os.path.exists(script_path):
-             return {
+            return {
                 "status": "error",
                 "error": f"Script file not found at: {script_path}",
+                "debug_info": {
+                    "working_dir": working_dir,
+                    "cwd": os.getcwd(),
+                    "original_path": script_path,
+                }
             }
 
         # Run the script
-        # Ensure cwd is valid
+        # Ensure cwd is valid - use the directory containing the script
         cwd = os.path.dirname(os.path.abspath(script_path))
+        
+        logger.info(f"Executing training script: {script_path}")
+        logger.info(f"Working directory: {cwd}")
         
         result = subprocess.run(
             ["python", script_path],
@@ -766,6 +852,8 @@ def execute_training_script(
             "output": result.stdout,
             "error_output": result.stderr,
             "return_code": result.returncode,
+            "script_path": script_path,
+            "cwd": cwd,
         }
         
     except subprocess.TimeoutExpired:
