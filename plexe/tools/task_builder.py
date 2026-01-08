@@ -752,6 +752,95 @@ def validate_task_code(code: str) -> Dict[str, Any]:
 
 
 @tool
+def save_task_to_file(code: str, file_name: str = "task.py") -> Dict[str, Any]:
+    """
+    PREFERRED METHOD: Directly save Task class code to a Python file.
+    
+    This is the simplest way to export task code - just provide the code and it
+    will be saved to the current working directory (workdir/chat-session-*/tasks/).
+    
+    Use this tool INSTEAD of the register_task_code + export_task_code workflow
+    for simpler, more reliable task export.
+    
+    Args:
+        code: The complete Python code for the Task class (must include imports,
+              class definition, and make_table method)
+        file_name: Name of the output file (default: "task.py")
+        
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating if file was saved
+        - file_path: Absolute path to the saved file
+        - class_name: Name of the Task class extracted from code
+        - error: Error message if failed
+    """
+    from datetime import datetime
+    import re
+    
+    try:
+        object_registry = ObjectRegistry()
+        
+        # Validate code first
+        validation = validate_task_code.__wrapped__(code)
+        if not validation["valid"]:
+            return {
+                "success": False,
+                "error": f"Code validation failed: {validation['errors']}",
+                "warnings": validation.get("warnings", [])
+            }
+        
+        # Get or create working directory
+        try:
+            output_dir = object_registry.get(str, "working_dir")
+        except KeyError:
+            try:
+                output_dir = object_registry.get(str, "current_chat_session_dir")
+            except KeyError:
+                # Create new session directory
+                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                output_dir = f"workdir/chat-session-{timestamp}"
+                object_registry.register(str, "current_chat_session_dir", output_dir, overwrite=True)
+        
+        # Create output directory
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Ensure file_name ends with .py
+        if not file_name.endswith(".py"):
+            file_name = f"{file_name}.py"
+        
+        # Write the file
+        file_path = os.path.join(output_dir, file_name)
+        
+        with open(file_path, 'w') as f:
+            f.write(code)
+        
+        # Extract class name from code
+        class_match = re.search(r"class\s+(\w+)\s*\(", code)
+        class_name = class_match.group(1) if class_match else "UnknownTask"
+        
+        # Register task info for later use by other agents
+        export_info = {
+            "class_name": class_name,
+            "export_path": os.path.abspath(file_path),
+            "module_name": file_name.replace(".py", "")
+        }
+        object_registry.register(dict, "task_code", export_info, overwrite=True)
+        
+        logger.info(f"✅ Saved task code to '{file_path}' (class: {class_name})")
+        
+        return {
+            "success": True,
+            "file_path": os.path.abspath(file_path),
+            "class_name": class_name,
+            "message": f"Successfully saved {class_name} to '{file_path}'"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to save task code: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@tool
 def register_task_code(
     dataset_name: str,
     task_name: str,

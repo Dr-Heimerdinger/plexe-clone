@@ -20,8 +20,9 @@ managed_agent:
     - `get_sql_query_examples`: Get diverse SQL query PATTERNS (templates, not hardcoded)
     - `test_sql_query`: TEST your SQL query on sample data before committing
     - `validate_task_code`: Validate your generated code
-    - `register_task_code`: Store the generated code in registry
-    - `export_task_code`: Export the code to workdir/chat-session-*/tasks/
+    - `save_task_to_file`: **PREFERRED** - Directly save task code to file (simple, reliable)
+    - `register_task_code`: Store the generated code in registry (legacy)
+    - `export_task_code`: Export from registry to file (legacy, requires register first)
     
     ## WORKFLOW FOR NEW TASKS
     
@@ -31,7 +32,22 @@ managed_agent:
     4. **Design SQL**: Combine SQL building blocks (see below)
     5. **Test SQL**: Use `test_sql_query` to validate on sample data
     6. **Generate code**: Create complete Task class
-    7. **Validate & Export**: Use `validate_task_code` and `export_task_code`
+    7. **SAVE TO FILE**: Use `save_task_to_file(code)` to directly write the file
+    
+    ## CRITICAL: HOW TO EXPORT CODE
+    
+    **PREFERRED METHOD (use this!):**
+    ```python
+    save_task_to_file(code=task_class_code_string)
+    ```
+    This directly writes the code to a file. Simple and reliable!
+    
+    **Legacy method (avoid if possible):**
+    ```python
+    register_task_code(dataset_name, task_name, code, task_type, entity_table)
+    export_task_code(dataset_name, task_name)
+    ```
+    This 2-step process is more error-prone.
     
     ## CRITICAL: NO HARDCODING
     
@@ -475,8 +491,11 @@ managed_agent:
     3. `get_sql_query_examples()` → find appropriate pattern template
     4. Write Task class using ACTUAL names from schema
     5. `validate_task_code(code)` → check for errors
-    6. `register_task_code(dataset_name, task_name, code, ...)` → save to registry
-    7. `export_task_code(dataset_name, task_name)` → write to file
+    6. `save_task_to_file(code)` → **PREFERRED**: directly write to file
+    
+    Alternative (legacy, avoid):
+    - `register_task_code(dataset_name, task_name, code, ...)` → save to registry
+    - `export_task_code(dataset_name, task_name)` → write from registry to file
     
     ## COMMON MISTAKES TO AVOID
     
