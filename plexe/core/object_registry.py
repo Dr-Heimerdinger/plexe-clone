@@ -5,11 +5,50 @@ This module provides a generic Registry pattern implementation for storing and r
 import logging
 import dataclasses
 import copy
-from typing import Dict, List, Type, TypeVar, Any
+import traceback
+from typing import Dict, List, Type, TypeVar, Any, Optional
 
 
 T = TypeVar("T")
 logger = logging.getLogger(__name__)
+
+
+class RegistryError(Exception):
+    """Exception raised for registry operations errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        operation: str,
+        item_type: Optional[str] = None,
+        item_name: Optional[str] = None,
+        cause: Optional[Exception] = None,
+    ):
+        self.operation = operation
+        self.item_type = item_type
+        self.item_name = item_name
+        self.cause = cause
+        self.stack_trace = traceback.format_exc()
+        
+        # Build detailed message
+        parts = [message]
+        if item_type:
+            parts.append(f"type={item_type}")
+        if item_name:
+            parts.append(f"name={item_name}")
+        if cause:
+            parts.append(f"caused by: {type(cause).__name__}: {str(cause)}")
+        
+        super().__init__(" | ".join(parts))
+    
+    def get_full_trace(self) -> str:
+        """Get complete error trace."""
+        traces = [f"RegistryError during '{self.operation}': {str(self)}"]
+        traces.append(f"Stack trace:\n{self.stack_trace}")
+        if self.cause and hasattr(self.cause, '__traceback__'):
+            cause_trace = ''.join(traceback.format_tb(self.cause.__traceback__))
+            traces.append(f"Cause trace:\n{cause_trace}")
+        return "\n".join(traces)
 
 
 @dataclasses.dataclass
@@ -82,14 +121,39 @@ class ObjectRegistry:
         :param t: type prefix for the item
         :param name: the name of the item to retrieve
         :return: The registered item
-        :raises KeyError: If the item is not found in the registry
+        :raises RegistryError: If the item is not found in the registry (wraps KeyError)
         """
         uri = self._get_uri(t, name)
         if uri not in self._items:
-            logger.warning(f"⚠️ Item '{uri}' not found in registry")
-            raise KeyError(f"Item '{uri}' not found in registry")
-        logger.info(f"Registry: Retrieved {uri} (immutable={self._items[uri].immutable})")
+            available_items = self.list_by_type(t)
+            error_msg = (
+                f"Item '{uri}' not found in registry. "
+                f"Available items of type {t}: {available_items[:10]}{'...' if len(available_items) > 10 else ''}"
+            )
+            logger.warning(f"⚠️ {error_msg}")
+            raise RegistryError(
+                message=f"Item not found",
+                operation="get",
+                item_type=str(t),
+                item_name=name,
+            )
+        logger.debug(f"Registry: Retrieved {uri} (immutable={self._items[uri].immutable})")
         return self._items[uri].item if not self._items[uri].immutable else copy.deepcopy(self._items[uri].item)
+
+    def get_or_none(self, t: Type[T], name: str) -> Optional[T]:
+        """
+        Retrieve an item by name, returning None if not found.
+        
+        Use this when the item might not exist and that's acceptable.
+
+        :param t: type prefix for the item
+        :param name: the name of the item to retrieve
+        :return: The registered item or None
+        """
+        try:
+            return self.get(t, name)
+        except (RegistryError, KeyError):
+            return None
 
     def get_multiple(self, t: Type[T], names: List[str]) -> Dict[str, T]:
         """
@@ -98,9 +162,23 @@ class ObjectRegistry:
         :param t: type prefix for the items
         :param names: List of item names to retrieve
         :return: Dictionary mapping item names to items
-        :raises KeyError: If any item is not found in the registry
+        :raises RegistryError: If any item is not found in the registry
         """
-        return {name: self.get(t, name) for name in names}
+        result = {}
+        missing = []
+        for name in names:
+            try:
+                result[name] = self.get(t, name)
+            except (RegistryError, KeyError):
+                missing.append(name)
+        
+        if missing:
+            raise RegistryError(
+                message=f"Items not found: {missing}",
+                operation="get_multiple",
+                item_type=str(t),
+            )
+        return result
 
     def get_all(self, t: Type[T]) -> Dict[str, T]:
         """
@@ -117,12 +195,19 @@ class ObjectRegistry:
 
         :param t: type prefix for the item
         :param name: the name of the item to delete
+        :raises RegistryError: If the item is not found
         """
         uri = self._get_uri(t, name)
         if uri in self._items:
             del self._items[uri]
+            logger.debug(f"Registry: Deleted {uri}")
         else:
-            raise KeyError(f"Item '{uri}' not found in registry")
+            raise RegistryError(
+                message=f"Cannot delete - item not found",
+                operation="delete",
+                item_type=str(t),
+                item_name=name,
+            )
 
     def clear(self) -> None:
         """

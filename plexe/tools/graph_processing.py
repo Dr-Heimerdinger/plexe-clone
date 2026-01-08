@@ -4,6 +4,7 @@ Tools for graph processing and construction for the Relational Graph Architect A
 
 import re
 import logging
+import traceback
 from typing import Dict, List, Any, Tuple, Optional, Union
 from smolagents import tool
 import pandas as pd
@@ -17,12 +18,22 @@ from torch_geometric.data import HeteroData
 
 # ObjectRegistry for sharing data between agents
 from plexe.core.object_registry import ObjectRegistry
+from plexe.internal.common.errors import DatabaseError, with_retry, RetryConfig
 
 logger = logging.getLogger(__name__)
 
 
+# Retry config for database operations
+DB_RETRY_CONFIG = RetryConfig(
+    max_attempts=3,
+    initial_delay=1.0,
+    max_delay=10.0,
+    retryable_exceptions=(ConnectionError, TimeoutError, OSError),
+)
+
+
 @tool
-def get_table_columns(db_connection: str, table_name: str) -> List[str]:
+def get_table_columns(db_connection: str, table_name: str) -> Dict[str, Any]:
     """
     Get the list of column names for a specific table in the database.
     Use this to verify column names before writing SQL queries.
@@ -32,16 +43,29 @@ def get_table_columns(db_connection: str, table_name: str) -> List[str]:
         table_name: Name of the table.
         
     Returns:
-        List of column names.
+        Dict with 'success', 'columns' list, or 'error' information.
     """
     try:
         engine = create_engine(db_connection)
         inspector = inspect(engine)
         columns = [col['name'] for col in inspector.get_columns(table_name)]
-        return columns
+        return {
+            "success": True,
+            "table_name": table_name,
+            "columns": columns,
+            "column_count": len(columns),
+        }
     except Exception as e:
-        logger.error(f"Error getting columns for table {table_name}: {e}")
-        return []
+        error_msg = f"Error getting columns for table {table_name}: {e}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+        return {
+            "success": False,
+            "table_name": table_name,
+            "columns": [],
+            "error": error_msg,
+            "error_type": type(e).__name__,
+            "stack_trace": traceback.format_exc(),
+        }
 
 
 # =============================================================================

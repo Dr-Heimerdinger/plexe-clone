@@ -22,14 +22,16 @@ import logging
 import subprocess
 import sys
 import time
+import traceback
 import pyarrow.parquet as pq
 import pyarrow as pa
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from plexe.internal.common.datasets.interface import TabularConvertible
 from plexe.internal.common.utils.response import extract_performance
 from plexe.internal.models.execution.executor import ExecutionResult, Executor
+from plexe.internal.common.errors import CodeExecutionError
 from plexe.config import config
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,16 @@ class ProcessExecutor(Executor):
 
     The `ProcessExecutor` class implements the `Executor` interface, allowing Python code
     snippets to be executed with strict isolation, output capture, and timeout enforcement.
+    
+    Features:
+    - Retry logic for transient failures (file I/O, process spawning)
+    - Detailed error tracking with stack traces
+    - Proper resource cleanup
     """
+
+    # Class-level retry configuration
+    MAX_RETRIES = 3
+    RETRY_DELAY_BASE = 2.0  # seconds, exponential backoff
 
     def __init__(
         self,
@@ -74,16 +85,20 @@ class ProcessExecutor(Executor):
         self.dataset_files = []
         self.code_file = None
         self.process = None
+        self.execution_id = execution_id
+        self._last_error: Optional[Exception] = None
 
-    def run(self) -> ExecutionResult:
-        """Execute code in a subprocess and return results."""
-        logger.debug(f"ProcessExecutor is executing code with working directory: {self.working_dir}")
-        start_time = time.time()
-
+    def _prepare_execution_environment(self) -> None:
+        """
+        Prepare the execution environment by writing code and datasets to files.
+        
+        Raises:
+            CodeExecutionError: If file preparation fails
+        """
         try:
             # Write code to file with module environment setup
             self.code_file = self.working_dir / self.code_file_name
-            module_setup = "import os\n" "import sys\n" "from pathlib import Path\n\n"
+            module_setup = "import os\nimport sys\nfrom pathlib import Path\n\n"
             with open(self.code_file, "w", encoding="utf-8") as f:
                 f.write(module_setup + self.code)
 
@@ -93,8 +108,30 @@ class ProcessExecutor(Executor):
                 dataset_file: Path = self.working_dir / f"{dataset_name}.parquet"
                 pq.write_table(pa.Table.from_pandas(df=dataset.to_pandas()), dataset_file)
                 self.dataset_files.append(dataset_file)
+                
+        except Exception as e:
+            error_msg = f"Failed to prepare execution environment: {str(e)}"
+            logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+            raise CodeExecutionError(
+                message=error_msg,
+                code=self.code[:500] + "..." if len(self.code) > 500 else self.code,
+                cause=e,
+                context={"execution_id": self.execution_id, "working_dir": str(self.working_dir)},
+            ) from e
 
-            # Execute the code in a subprocess
+    def _execute_subprocess(self, attempt: int = 1) -> ExecutionResult:
+        """
+        Execute the code in a subprocess (single attempt).
+        
+        Args:
+            attempt: Current attempt number for logging
+            
+        Returns:
+            ExecutionResult with execution details
+        """
+        start_time = time.time()
+        
+        try:
             self.process = subprocess.Popen(
                 [sys.executable, str(self.code_file)],
                 stdout=subprocess.PIPE,
@@ -106,26 +143,34 @@ class ProcessExecutor(Executor):
             stdout, stderr = self.process.communicate(timeout=self.timeout)
             exec_time = time.time() - start_time
 
-            # Collect all model artifacts created by the execution - not code or datasets
-            model_artifacts = []
-            model_dir = self.working_dir / "model_files"
-            if model_dir.exists() and model_dir.is_dir():
-                model_artifacts.append(str(model_dir))
-            else:
-                # If model_files directory doesn't exist, collect individual files
-                for file in self.working_dir.iterdir():
-                    if file != self.code_file and file not in self.dataset_files:
-                        model_artifacts.append(str(file))
+            # Collect all model artifacts created by the execution
+            model_artifacts = self._collect_artifacts()
 
             if self.process.returncode != 0:
+                error_msg = (
+                    f"Process exited with code {self.process.returncode} "
+                    f"(attempt {attempt}/{self.MAX_RETRIES})"
+                )
+                logger.warning(
+                    f"⚠️ {error_msg}\n"
+                    f"Stderr preview: {stderr[:500] if stderr else 'None'}\n"
+                    f"Stdout preview: {stdout[:200] if stdout else 'None'}"
+                )
                 return ExecutionResult(
                     term_out=[stdout],
                     exec_time=exec_time,
-                    exception=RuntimeError(f"Process exited with code {self.process.returncode}: {stderr}"),
+                    exception=CodeExecutionError(
+                        message=error_msg,
+                        code=self.code[:200],
+                        stdout=stdout,
+                        stderr=stderr,
+                        return_code=self.process.returncode,
+                        context={"attempt": attempt, "execution_id": self.execution_id},
+                    ),
                     model_artifact_paths=model_artifacts,
                 )
 
-            # Extract performance and create result
+            logger.debug(f"✅ Code executed successfully in {exec_time:.2f}s (attempt {attempt})")
             return ExecutionResult(
                 term_out=[stdout],
                 exec_time=exec_time,
@@ -137,61 +182,152 @@ class ProcessExecutor(Executor):
             if self.process:
                 self.process.kill()
 
+            error_msg = f"Execution exceeded {self.timeout}s timeout (attempt {attempt}/{self.MAX_RETRIES})"
+            logger.error(f"🔥 {error_msg}")
             return ExecutionResult(
                 term_out=[],
                 exec_time=self.timeout,
-                exception=TimeoutError(
-                    f"Execution exceeded {self.timeout}s timeout - individual run timeout limit reached"
+                exception=CodeExecutionError(
+                    message=error_msg,
+                    code=self.code[:200],
+                    context={"timeout": self.timeout, "attempt": attempt},
                 ),
             )
-        except Exception as e:
-            stdout, stderr = "", ""
+            
+    def _collect_artifacts(self) -> list:
+        """Collect model artifacts from the working directory."""
+        model_artifacts = []
+        model_dir = self.working_dir / "model_files"
+        if model_dir.exists() and model_dir.is_dir():
+            model_artifacts.append(str(model_dir))
+        else:
+            for file in self.working_dir.iterdir():
+                if file != self.code_file and file not in self.dataset_files:
+                    model_artifacts.append(str(file))
+        return model_artifacts
 
-            if self.process:
-                # Try to collect any output that was produced before the exception
-                try:
-                    if hasattr(self.process, "stdout") and self.process.stdout:
-                        stdout = self.process.stdout.read() or ""
-                except Exception:
-                    pass  # Best effort to get output
-
-                self.process.kill()
-
-            return ExecutionResult(
-                term_out=[stdout or f"Process failed with exception: {str(e)}"],
-                exec_time=time.time() - start_time,
-                exception=e,
-            )
-        finally:
-            # Always clean up resources regardless of execution path
-            self.cleanup()
+    def run(self) -> ExecutionResult:
+        """
+        Execute code in a subprocess with retry logic for transient failures.
+        
+        Returns:
+            ExecutionResult with execution details, performance metrics, and any errors
+        """
+        logger.debug(f"ProcessExecutor starting execution in: {self.working_dir}")
+        
+        # Prepare environment (with its own error handling)
+        self._prepare_execution_environment()
+        
+        last_result = None
+        
+        for attempt in range(1, self.MAX_RETRIES + 1):
+            try:
+                result = self._execute_subprocess(attempt)
+                last_result = result
+                
+                # Success or non-retryable error
+                if result.exception is None:
+                    return result
+                
+                # Check if error is retryable (process spawn failures, file I/O issues)
+                if isinstance(result.exception, CodeExecutionError):
+                    exc = result.exception
+                    # Timeout and process errors are generally not retryable
+                    if "timeout" in str(exc).lower():
+                        logger.error(f"❌ Timeout error - not retrying")
+                        return result
+                    
+                    # Non-zero return codes might be code bugs, not infrastructure issues
+                    if exc.return_code is not None and exc.return_code != 0:
+                        # Check stderr for transient errors
+                        if exc.stderr and any(
+                            transient in exc.stderr.lower() 
+                            for transient in ["memory", "resource", "temporary", "busy"]
+                        ):
+                            logger.info(f"🔄 Transient error detected, will retry...")
+                        else:
+                            logger.error(f"❌ Code error (return code {exc.return_code}) - not retrying")
+                            return result
+                
+                # Retry with backoff
+                if attempt < self.MAX_RETRIES:
+                    delay = self.RETRY_DELAY_BASE * (2 ** (attempt - 1))
+                    logger.info(f"⏳ Retrying in {delay:.1f}s... (attempt {attempt + 1}/{self.MAX_RETRIES})")
+                    time.sleep(delay)
+                    
+            except Exception as e:
+                # Unexpected error during execution
+                error_msg = f"Unexpected error during execution: {type(e).__name__}: {e}"
+                logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+                
+                if attempt >= self.MAX_RETRIES:
+                    return ExecutionResult(
+                        term_out=[f"Execution failed: {error_msg}"],
+                        exec_time=0,
+                        exception=CodeExecutionError(
+                            message=error_msg,
+                            cause=e,
+                            context={
+                                "attempt": attempt,
+                                "execution_id": self.execution_id,
+                                "stack_trace": traceback.format_exc(),
+                            },
+                        ),
+                    )
+                
+                delay = self.RETRY_DELAY_BASE * (2 ** (attempt - 1))
+                logger.info(f"⏳ Retrying after unexpected error in {delay:.1f}s...")
+                time.sleep(delay)
+        
+        # All retries exhausted
+        logger.error(
+            f"❌ Execution failed after {self.MAX_RETRIES} attempts.\n"
+            f"Last error: {last_result.exception if last_result else 'Unknown'}"
+        )
+        
+        # Cleanup before returning
+        self.cleanup()
+        return last_result
 
     def cleanup(self):
         """
         Clean up resources after execution while preserving model artifacts.
+        
+        This method is idempotent and safe to call multiple times.
         """
         logger.debug(f"Cleaning up resources for execution in {self.working_dir}")
 
-        try:
-            # Clean up dataset files
-            for dataset_file in self.dataset_files:
-                dataset_file.unlink(missing_ok=True)
+        errors = []
 
-            # Clean up code file
-            if self.code_file:
-                try:
-                    self.code_file.unlink(missing_ok=True)
-                except AttributeError:
-                    # Python 3.7 compatibility - missing_ok not available
-                    if self.code_file.exists():
-                        self.code_file.unlink()
+        # Clean up dataset files
+        for dataset_file in self.dataset_files:
+            try:
+                if dataset_file.exists():
+                    dataset_file.unlink()
+            except Exception as e:
+                errors.append(f"Failed to delete dataset file {dataset_file}: {e}")
 
-            # Terminate process if still running
-            if self.process and self.process.poll() is None:
+        # Clean up code file
+        if self.code_file:
+            try:
+                if self.code_file.exists():
+                    self.code_file.unlink()
+            except Exception as e:
+                errors.append(f"Failed to delete code file {self.code_file}: {e}")
+
+        # Terminate process if still running
+        if self.process and self.process.poll() is None:
+            try:
                 self.process.kill()
+                self.process.wait(timeout=5)  # Wait for process to terminate
+            except Exception as e:
+                errors.append(f"Failed to kill process: {e}")
 
-        except Exception as e:
-            logger.warning(f"Error during resource cleanup: {str(e)}")
+        if errors:
+            logger.warning(
+                f"Errors during resource cleanup for {self.working_dir}:\n" + 
+                "\n".join(f"  - {err}" for err in errors)
+            )
 
     def __del__(self):
         """Ensure cleanup happens when the object is garbage collected."""

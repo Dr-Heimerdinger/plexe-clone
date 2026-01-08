@@ -788,8 +788,15 @@ def get_latest_datasets() -> Dict[str, Any]:
         return result
 
     except Exception as e:
-        logger.warning(f"⚠️ Error getting latest datasets: {str(e)}")
-        return {}
+        error_msg = f"Error getting latest datasets: {str(e)}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+        return {
+            "error": True,
+            "error_message": error_msg,
+            "error_type": type(e).__name__,
+            "datasets": [],
+            "stack_trace": traceback.format_exc(),
+        }
 
 
 @tool
@@ -996,8 +1003,16 @@ def get_dataset_reports() -> Dict[str, Dict]:
         }
 
     except Exception as e:
-        logger.warning(f"⚠️ Error getting EDA reports: {str(e)}")
-        return {}
+        error_msg = f"Error getting EDA reports: {str(e)}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+        return {
+            "error": True,
+            "error_message": error_msg,
+            "error_type": type(e).__name__,
+            "eda_reports": {},
+            "feature_engineering_reports": {},
+            "stack_trace": traceback.format_exc(),
+        }
 
 
 @tool

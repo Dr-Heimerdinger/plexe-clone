@@ -149,8 +149,15 @@ def get_global_schemas() -> Dict[str, Dict[str, str]]:
         return result
 
     except Exception as e:
-        logger.warning(f"⚠️ Error getting global schemas: {str(e)}")
-        return {}
+        error_msg = f"Error getting global schemas: {str(e)}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+        # Return structured error response instead of empty dict
+        return {
+            "error": True,
+            "error_message": error_msg,
+            "error_type": type(e).__name__,
+            "stack_trace": traceback.format_exc(),
+        }
 
 
 @tool
@@ -308,5 +315,13 @@ def get_solution_schemas(solution_id: str) -> Dict[str, Dict[str, str]]:
         return result
 
     except Exception as e:
-        logger.warning(f"⚠️ Error getting solution schemas: {str(e)}")
-        return {}
+        error_msg = f"Error getting solution schemas for '{solution_id}': {str(e)}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+        # Return structured error response instead of empty dict
+        return {
+            "error": True,
+            "error_message": error_msg,
+            "error_type": type(e).__name__,
+            "solution_id": solution_id,
+            "stack_trace": traceback.format_exc(),
+        }

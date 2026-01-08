@@ -11,11 +11,23 @@ import uuid
 import types
 import warnings
 import subprocess
+import traceback
 from typing import Dict, List, Callable, Type
 
 from smolagents import tool
 
 from plexe.callbacks import Callback
+from plexe.internal.common.errors import (
+    CodeExecutionError,
+    RegistryError,
+    DatasetError,
+    with_retry,
+    RetryConfig,
+    DEFAULT_CODE_EXECUTION_RETRY,
+    ErrorContext,
+    log_exception,
+    create_error_result,
+)
 from plexe.internal.common.datasets.interface import TabularConvertible
 from plexe.internal.common.datasets.adapter import DatasetAdapter
 from plexe.core.object_registry import ObjectRegistry
@@ -291,75 +303,158 @@ def apply_feature_transformer(dataset_name: str) -> Dict:
 
         return {"success": True, "original_dataset_name": dataset_name, "new_dataset_name": transformed_name}
     except Exception as e:
-        import traceback
-
-        logger.debug(f"Error applying feature transformer: {str(e)}\n{traceback.format_exc()}")
-        return {"success": False, "error": str(e), "transformed_datasets": []}
-
-
-@tool
-def get_model_artifacts() -> List[str]:
-    """
-    Get all registered model artifact names.
-
-    Returns:
-        List of artifact names (e.g., ["model.pkl", "scaler.pkl", ...])
-    """
-    object_registry = ObjectRegistry()
-
-    try:
-        # Get all artifact names from registry
-        artifact_names = object_registry.list_by_type(Artifact)
-        return artifact_names
-    except Exception as e:
-        logger.warning(f"⚠️ Error getting model artifacts: {str(e)}")
-        return []
+        error_msg = f"Error applying feature transformer to {dataset_name}: {str(e)}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+        return {
+            "success": False, 
+            "error": error_msg,
+            "error_type": type(e).__name__,
+            "original_dataset_name": dataset_name,
+            "stack_trace": traceback.format_exc(),
+        }
 
 
 from plexe.tools.io_manager import write_file
 
 
-@tool
-def execute_code(code: str, timeout: int = 60) -> dict:
+def _execute_code_with_retry(code_file: str, timeout: int, attempt: int = 1, max_attempts: int = 3) -> dict:
     """
-    Executes a string of Python code in a subprocess.
-
+    Internal function to execute code with retry logic.
+    
     Args:
-        code: The Python code to execute.
-        timeout: The timeout in seconds for the execution.
-
+        code_file: Path to the Python file to execute
+        timeout: Timeout in seconds
+        attempt: Current attempt number
+        max_attempts: Maximum number of retry attempts
+    
     Returns:
-        A dictionary containing the stdout, stderr, and return code.
+        Execution result dictionary
     """
-    # a temporary file to store the code
-    code_file = write_file("code.py", code)
+    import sys
+    
     try:
         process = subprocess.run(
-            ["python", code_file],
+            [sys.executable, code_file],
             capture_output=True,
             text=True,
             timeout=timeout,
             check=False,
         )
-        logger.debug(f"✅ Code executed with return code {process.returncode}")
-        return {
+        
+        result = {
+            "success": process.returncode == 0,
             "stdout": process.stdout,
             "stderr": process.stderr,
             "returncode": process.returncode,
+            "attempt": attempt,
         }
+        
+        if process.returncode == 0:
+            logger.debug(f"✅ Code executed successfully on attempt {attempt}")
+        else:
+            logger.warning(
+                f"⚠️ Code execution failed with return code {process.returncode} "
+                f"on attempt {attempt}/{max_attempts}\n"
+                f"Stderr: {process.stderr[:500] if process.stderr else 'None'}"
+            )
+            result["error"] = f"Process exited with code {process.returncode}"
+            result["error_type"] = "ExecutionError"
+        
+        return result
+        
     except subprocess.TimeoutExpired as e:
-        logger.error(f"🔥 Code execution timed out: {e}")
+        error_msg = f"Code execution timed out after {timeout}s on attempt {attempt}/{max_attempts}"
+        logger.error(f"🔥 {error_msg}")
         return {
-            "stdout": e.stdout,
-            "stderr": e.stderr,
+            "success": False,
+            "stdout": str(e.stdout) if e.stdout else "",
+            "stderr": str(e.stderr) if e.stderr else "",
             "returncode": -1,
-            "error": "TimeoutExpired",
+            "error": error_msg,
+            "error_type": "TimeoutExpired",
+            "timeout_seconds": timeout,
+            "attempt": attempt,
         }
-    except Exception as e:
-        logger.error(f"🔥 Error executing code: {e}")
+    except OSError as e:
+        # OS errors (file not found, permission denied) might be retryable
+        error_msg = f"OS error during code execution: {e}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
         return {
+            "success": False,
             "stdout": "",
             "stderr": str(e),
             "returncode": -1,
-            "error": type(e).__name__,
+            "error": error_msg,
+            "error_type": "OSError",
+            "attempt": attempt,
+            "retryable": True,
+            "stack_trace": traceback.format_exc(),
         }
+    except Exception as e:
+        error_msg = f"Unexpected error during code execution: {type(e).__name__}: {e}"
+        logger.error(f"🔥 {error_msg}\nStack trace:\n{traceback.format_exc()}")
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": str(e),
+            "returncode": -1,
+            "error": error_msg,
+            "error_type": type(e).__name__,
+            "attempt": attempt,
+            "retryable": False,
+            "stack_trace": traceback.format_exc(),
+        }
+
+
+@tool
+def execute_code(code: str, timeout: int = 60, max_retries: int = 2) -> dict:
+    """
+    Executes a string of Python code in a subprocess with retry logic.
+
+    Args:
+        code: The Python code to execute.
+        timeout: The timeout in seconds for the execution.
+        max_retries: Maximum number of retry attempts for retryable errors.
+
+    Returns:
+        A dictionary containing:
+        - success: Boolean indicating if execution succeeded
+        - stdout: Standard output from execution
+        - stderr: Standard error from execution  
+        - returncode: Process return code
+        - error: Error message if failed
+        - error_type: Type of error if failed
+        - attempt: Which attempt succeeded/failed
+        - stack_trace: Full stack trace on error
+    """
+    import time
+    
+    # Write code to temporary file
+    code_file = write_file("code.py", code)
+    
+    last_result = None
+    
+    for attempt in range(1, max_retries + 1):
+        result = _execute_code_with_retry(code_file, timeout, attempt, max_retries)
+        last_result = result
+        
+        if result.get("success", False):
+            return result
+        
+        # Check if error is retryable
+        if not result.get("retryable", False) or attempt >= max_retries:
+            break
+        
+        # Exponential backoff before retry
+        delay = min(2 ** attempt, 10)  # Max 10 seconds
+        logger.info(f"⏳ Retrying code execution in {delay}s... (attempt {attempt + 1}/{max_retries})")
+        time.sleep(delay)
+    
+    # All attempts failed
+    logger.error(
+        f"🔥 Code execution failed after {max_retries} attempts.\n"
+        f"Last error: {last_result.get('error', 'Unknown')}\n"
+        f"Code preview: {code[:200]}..."
+    )
+    
+    return last_result
