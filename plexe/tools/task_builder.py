@@ -757,10 +757,14 @@ def save_task_to_file(code: str, file_name: str = "task.py") -> Dict[str, Any]:
     PREFERRED METHOD: Directly save Task class code to a Python file.
     
     This is the simplest way to export task code - just provide the code and it
-    will be saved to the current working directory (workdir/chat-session-*/tasks/).
+    will be saved to the working directory (e.g., .workdir/chat-session-YYYYMMDD-HHMMSS/).
     
     Use this tool INSTEAD of the register_task_code + export_task_code workflow
     for simpler, more reliable task export.
+    
+    This tool also:
+    - Saves task_metadata.json alongside the code file for persistence
+    - Registers the task code in ObjectRegistry for immediate use by other agents
     
     Args:
         code: The complete Python code for the Task class (must include imports,
@@ -772,10 +776,12 @@ def save_task_to_file(code: str, file_name: str = "task.py") -> Dict[str, Any]:
         - success: Boolean indicating if file was saved
         - file_path: Absolute path to the saved file
         - class_name: Name of the Task class extracted from code
+        - metadata_file: Path to the metadata JSON file
         - error: Error message if failed
     """
     from datetime import datetime
     import re
+    import json
     
     try:
         object_registry = ObjectRegistry()
@@ -792,52 +798,88 @@ def save_task_to_file(code: str, file_name: str = "task.py") -> Dict[str, Any]:
         # Get or create working directory
         try:
             output_dir = object_registry.get(str, "working_dir")
+            logger.info(f"Using registered working_dir: {output_dir}")
         except KeyError:
             try:
                 output_dir = object_registry.get(str, "current_chat_session_dir")
+                logger.info(f"Using current_chat_session_dir: {output_dir}")
             except KeyError:
                 # Create new session directory
                 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-                output_dir = f"workdir/chat-session-{timestamp}"
+                output_dir = f".workdir/chat-session-{timestamp}"
                 object_registry.register(str, "current_chat_session_dir", output_dir, overwrite=True)
+                logger.info(f"Created new session directory: {output_dir}")
         
-        # Create output directory
+        # Normalize and create output directory
+        output_dir = os.path.abspath(output_dir)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
         # Ensure file_name ends with .py
         if not file_name.endswith(".py"):
             file_name = f"{file_name}.py"
         
-        # Write the file
+        # Write the code file
         file_path = os.path.join(output_dir, file_name)
         
         with open(file_path, 'w') as f:
             f.write(code)
+        logger.info(f"Wrote task code to '{file_path}'")
         
         # Extract class name from code
         class_match = re.search(r"class\s+(\w+)\s*\(", code)
         class_name = class_match.group(1) if class_match else "UnknownTask"
         
-        # Register task info for later use by other agents
+        # Extract additional metadata from code for better registry info
+        task_type_match = re.search(r"task_type\s*=\s*TaskType\.(\w+)", code)
+        task_type = task_type_match.group(1) if task_type_match else None
+        
+        entity_table_match = re.search(r"entity_table\s*=\s*[\"'](\w+)[\"']", code)
+        entity_table = entity_table_match.group(1) if entity_table_match else None
+        
+        target_col_match = re.search(r"target_col\s*=\s*[\"'](\w+)[\"']", code)
+        target_col = target_col_match.group(1) if target_col_match else None
+        
+        # Prepare metadata (include the code itself for full recovery)
         export_info = {
             "class_name": class_name,
-            "export_path": os.path.abspath(file_path),
-            "module_name": file_name.replace(".py", "")
+            "export_path": file_path,
+            "module_name": file_name.replace(".py", ""),
+            "task_type": task_type,
+            "entity_table": entity_table,
+            "target_col": target_col,
+            "code": code,  # Include code for full recovery
         }
-        object_registry.register(dict, "task_code", export_info, overwrite=True)
         
-        logger.info(f"✅ Saved task code to '{file_path}' (class: {class_name})")
+        # Save metadata to JSON file for persistence across sessions/processes
+        # This is CRITICAL for cross-agent communication
+        metadata_file = os.path.join(output_dir, "task_metadata.json")
+        with open(metadata_file, 'w') as mf:
+            json.dump(export_info, mf, indent=2)
+        logger.info(f"✅ Saved task metadata to '{metadata_file}'")
+        
+        # Verify the metadata file was created
+        if not os.path.exists(metadata_file):
+            raise IOError(f"Metadata file was not created: {metadata_file}")
+        
+        # Register task info in memory registry (for same-process access)
+        object_registry.register(dict, "task_code", export_info, overwrite=True)
+        logger.info(f"✅ Registered task_code in ObjectRegistry (class: {class_name})")
+        
+        logger.info(f"✅ Successfully saved task code to '{file_path}' (class: {class_name})")
         
         return {
             "success": True,
-            "file_path": os.path.abspath(file_path),
+            "file_path": file_path,
+            "metadata_file": metadata_file,
             "class_name": class_name,
-            "message": f"Successfully saved {class_name} to '{file_path}'"
+            "output_dir": output_dir,
+            "message": f"Successfully saved {class_name} to '{file_path}' with metadata at '{metadata_file}'"
         }
         
     except Exception as e:
-        logger.error(f"Failed to save task code: {e}")
-        return {"success": False, "error": str(e)}
+        import traceback
+        logger.error(f"Failed to save task code: {e}\n{traceback.format_exc()}")
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
 
 
 @tool
@@ -863,14 +905,16 @@ def register_task_code(
     Returns:
         Confirmation message with registered key
     """
+    import re
+    
     try:
         object_registry = ObjectRegistry()
         
-        # Store the code
+        # Store the code under the legacy key (for backward compatibility)
         code_key = f"task_code_{dataset_name}_{task_name}"
         object_registry.register(str, code_key, code, overwrite=True)
         
-        # Store metadata
+        # Store metadata under the legacy key
         metadata_key = f"task_metadata_{dataset_name}_{task_name}"
         metadata = {
             "dataset_name": dataset_name,
@@ -882,7 +926,26 @@ def register_task_code(
         }
         object_registry.register(dict, metadata_key, metadata, overwrite=True)
         
-        logger.info(f"✅ Registered task code for '{dataset_name}/{task_name}'")
+        # CRITICAL: Also register under the canonical "task_code" key that other agents expect
+        # This ensures cross-agent compatibility with get_dataset_task_info_from_registry()
+        class_match = re.search(r"class\s+(\w+)\s*\(", code)
+        class_name = class_match.group(1) if class_match else task_name
+        
+        target_col_match = re.search(r"target_col\s*=\s*[\"'](\w+)[\"']", code)
+        target_col = target_col_match.group(1) if target_col_match else None
+        
+        canonical_info = {
+            "class_name": class_name,
+            "export_path": None,  # Not exported yet
+            "module_name": None,  # Not exported yet
+            "task_type": task_type,
+            "entity_table": entity_table,
+            "target_col": target_col,
+            "code": code,
+        }
+        object_registry.register(dict, "task_code", canonical_info, overwrite=True)
+        
+        logger.info(f"✅ Registered task code for '{dataset_name}/{task_name}' (also under canonical 'task_code' key)")
         
         return {
             "success": True,
@@ -917,6 +980,7 @@ def export_task_code(
         - file_path: Path to the exported file
     """
     from datetime import datetime
+    import json
     
     try:
         object_registry = ObjectRegistry()
@@ -946,7 +1010,8 @@ def export_task_code(
                     output_dir = f".workdir/chat-session-{timestamp}"
                     object_registry.register(str, "current_chat_session_dir", output_dir, overwrite=True)
         
-        # Create output directory
+        # Normalize and create output directory
+        output_dir = os.path.abspath(output_dir)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
         # Write the file
@@ -955,6 +1020,7 @@ def export_task_code(
         
         with open(file_path, 'w') as f:
             f.write(code)
+        logger.info(f"Wrote task code to '{file_path}'")
             
         # Register export info
         # Extract class name from code
@@ -968,7 +1034,8 @@ def export_task_code(
         export_info = {
             "class_name": class_name,
             "export_path": file_path,
-            "module_name": "task"
+            "module_name": "task",
+            "code": code,  # Include code for full recovery
         }
         
         # Try to get metadata to populate additional fields
@@ -982,6 +1049,12 @@ def export_task_code(
             })
         except KeyError:
             pass
+        
+        # Save metadata to JSON file for persistence across sessions/processes
+        metadata_file = os.path.join(output_dir, "task_metadata.json")
+        with open(metadata_file, 'w') as mf:
+            json.dump(export_info, mf, indent=2)
+        logger.info(f"✅ Saved task metadata to '{metadata_file}'")
             
         object_registry.register(dict, "task_code", export_info, overwrite=True)
         
@@ -990,13 +1063,15 @@ def export_task_code(
         return {
             "success": True,
             "file_path": file_path,
+            "metadata_file": metadata_file,
             "output_dir": output_dir,
-            "message": f"Successfully exported task code to '{file_path}'"
+            "message": f"Successfully exported task code to '{file_path}' with metadata at '{metadata_file}'"
         }
         
     except Exception as e:
-        logger.error(f"Failed to export task code: {e}")
-        return {"success": False, "error": str(e)}
+        import traceback
+        logger.error(f"Failed to export task code: {e}\n{traceback.format_exc()}")
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
 
 
 @tool

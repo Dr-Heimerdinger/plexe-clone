@@ -432,9 +432,20 @@ def export_database_code(
             "export_path": file_path,
             "module_name": "dataset"
         }
+        
+        # Save metadata to JSON file for persistence across sessions
+        import json
+        metadata_file = os.path.join(output_dir, "dataset_metadata.json")
+        try:
+            with open(metadata_file, 'w') as mf:
+                json.dump(export_info, mf, indent=2)
+            logger.info(f"Saved dataset metadata to '{metadata_file}'")
+        except Exception as e:
+            logger.warning(f"Failed to save dataset metadata file: {e}")
+        
         object_registry.register(dict, "database_code", export_info, overwrite=True)
         
-        logger.info(f"✅ Exported database code to '{file_path}'")
+        logger.info(f"Exported database code to '{file_path}'")
         
         return {
             "success": True,

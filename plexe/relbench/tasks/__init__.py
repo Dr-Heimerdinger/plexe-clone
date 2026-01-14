@@ -4,8 +4,8 @@ from typing import List
 
 import pooch
 
-from relbench.base import BaseTask
-from relbench.datasets import get_dataset
+from ..base import BaseTask
+from ..datasets import get_dataset
 
 task_registry = defaultdict(dict)
 

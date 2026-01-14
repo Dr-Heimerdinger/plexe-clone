@@ -22,7 +22,6 @@ from plexe.tools.gnn_training_script_generator import (
     get_dataset_task_info_from_registry,
     validate_training_prerequisites,
 )
-from plexe.tools.interaction import save_to_workdir
 
 logger = logging.getLogger(__name__)
 
@@ -71,12 +70,9 @@ class RelationalGNNSpecialistAgent:
                 get_training_script_template,
                 # Validation
                 validate_training_prerequisites,
-                # Script generation
                 generate_training_script,
                 # Execution
                 execute_training_script,
-                # File saving
-                save_to_workdir,
             ],
             prompt_templates=get_prompt_templates(
                 base_template_name="code_agent.yaml",

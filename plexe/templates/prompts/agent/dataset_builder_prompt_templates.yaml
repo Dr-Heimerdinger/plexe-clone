@@ -51,7 +51,8 @@ managed_agent:
     from plexe.relbench.base import Database, Dataset, Table
     
     
-    class {DatasetName}Dataset(Dataset):
+    # ALWAYS use this class name
+    class GenDataset(Dataset):
         # Temporal split timestamps
         val_timestamp = pd.Timestamp("YYYY-MM-DD")
         test_timestamp = pd.Timestamp("YYYY-MM-DD")
@@ -62,11 +63,7 @@ managed_agent:
     
         def make_db(self) -> Database:
             path = self.csv_dir
-            
-            
-            # 1. LOAD CSV FILES
-            # Use actual table names from get_csv_files_from_path()
-            
+            # 1. LOAD CSV FILES 
             # For each CSV file discovered, load it:
             # {table_name} = pd.read_csv(os.path.join(path, "{table_name}.csv"))
             
@@ -177,8 +174,7 @@ managed_agent:
     ## IMPORTANT: Use Schema Metadata
     
     The table names, primary keys, foreign keys, and temporal columns should come from:
-    1. `get_csv_files_from_path()` - Returns list of CSV files (table names)
-    2. `get_schema_metadata_from_registry()` - Returns:
+    `get_schema_metadata_from_registry()` - Returns:
        - `tables`: Dict with table info including `primary_keys`, `temporal_columns`
        - `relationships`: List of FK relationships with `source_table`, `target_table`, `source_col`
        - `temporal_summary`: Tables with timestamps and their primary temporal columns

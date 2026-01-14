@@ -31,6 +31,19 @@ It uses temporal sampling to ensure no data leakage from future to past.
 
 import os
 import sys
+
+# Add project root to Python path to enable plexe imports
+# First, check if we're in a Docker environment (/app)
+if os.path.exists("/app/plexe"):
+    if "/app" not in sys.path:
+        sys.path.insert(0, "/app")
+else:
+    # Local development: go up from .workdir/chat-session-xxx/ to project root
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(script_dir))  # Go up two levels
+    if project_root not in sys.path and os.path.exists(os.path.join(project_root, "plexe")):
+        sys.path.insert(0, project_root)
+
 import math
 import copy
 import numpy as np
@@ -52,7 +65,7 @@ from torch_frame.data.stats import StatType
 {dataset_import}
 {task_import}
 
-# Import RelBench modeling utilities
+# Import RelBench modeling utilities (from plexe's built-in relbench)
 from plexe.relbench.modeling.graph import make_pkey_fkey_graph, get_node_train_table_input
 from plexe.relbench.modeling.utils import get_stype_proposal
 from plexe.relbench.modeling.nn import HeteroEncoder, HeteroGraphSAGE, HeteroTemporalEncoder
@@ -517,15 +530,6 @@ GLOVE_TEXT_EMBEDDER_CONFIG = '''
     )
 '''
 
-NO_TEXT_EMBEDDER = '''
-# No text embedder needed (no text columns detected)
-'''
-
-NO_TEXT_EMBEDDER_CONFIG = '''
-    text_embedder_cfg = None  # No text columns
-'''
-
-
 # =============================================================================
 # Loss Function Templates
 # =============================================================================
@@ -656,8 +660,8 @@ from {dataset_module} import {dataset_class_name}
             text_embedder_code = GLOVE_TEXT_EMBEDDER
             text_embedder_config = GLOVE_TEXT_EMBEDDER_CONFIG
         else:
-            text_embedder_code = NO_TEXT_EMBEDDER
-            text_embedder_config = NO_TEXT_EMBEDDER_CONFIG
+            text_embedder_code = GLOVE_TEXT_EMBEDDER
+            text_embedder_config = GLOVE_TEXT_EMBEDDER_CONFIG
         
         # Format num_neighbors for the script
         num_neighbors_str = str(num_neighbors)
@@ -836,8 +840,32 @@ def execute_training_script(
         # Ensure cwd is valid - use the directory containing the script
         cwd = os.path.dirname(os.path.abspath(script_path))
         
+        # Set up environment with PYTHONPATH to ensure plexe imports work
+        # This is critical because plexe.relbench is a local module, not installed via pip
+        env = os.environ.copy()
+        
+        # Find the project root (where plexe package is located)
+        # From /app/.workdir/chat-session-xxx/ we need to go to /app/
+        project_root = os.path.abspath(os.path.join(cwd, "..", ".."))
+        
+        # Also check if we're in Docker (/app) or local development
+        if os.path.exists("/app/plexe"):
+            project_root = "/app"
+        elif os.path.exists(os.path.join(project_root, "plexe")):
+            pass  # project_root is correct
+        else:
+            # Try current working directory
+            original_cwd = os.getcwd()
+            if os.path.exists(os.path.join(original_cwd, "plexe")):
+                project_root = original_cwd
+        
+        # Prepend project root to PYTHONPATH
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{project_root}:{cwd}:{existing_pythonpath}" if existing_pythonpath else f"{project_root}:{cwd}"
+        
         logger.info(f"Executing training script: {script_path}")
         logger.info(f"Working directory: {cwd}")
+        logger.info(f"PYTHONPATH: {env['PYTHONPATH']}")
         
         result = subprocess.run(
             ["python", script_path],
@@ -845,6 +873,7 @@ def execute_training_script(
             text=True,
             timeout=timeout,
             cwd=cwd,
+            env=env,
         )
         
         return {
@@ -854,6 +883,7 @@ def execute_training_script(
             "return_code": result.returncode,
             "script_path": script_path,
             "cwd": cwd,
+            "pythonpath": env["PYTHONPATH"],
         }
         
     except subprocess.TimeoutExpired:
@@ -888,6 +918,8 @@ def get_dataset_task_info_from_registry() -> Dict[str, Any]:
         - 'task_info': Information about the registered Task
         - 'working_dir': The working directory being used
     """
+    import json
+    
     try:
         object_registry = ObjectRegistry()
         
@@ -907,10 +939,37 @@ def get_dataset_task_info_from_registry() -> Dict[str, Any]:
             }
             if dataset_code_info.get("export_path"):
                 result["working_dir"] = os.path.dirname(dataset_code_info["export_path"])
+            logger.info(f"✅ Found database_code in registry: {dataset_code_info.get('class_name')}")
         except KeyError:
+            logger.warning("⚠️ database_code not found in registry. Attempting to load from file...")
+            
+            # Fallback: Try to load from dataset_metadata.json file
+            try:
+                working_dir = object_registry.get(str, "working_dir")
+                metadata_file = os.path.join(working_dir, "dataset_metadata.json")
+                
+                if os.path.exists(metadata_file):
+                    with open(metadata_file, 'r') as f:
+                        dataset_code_info = json.load(f)
+                    
+                    result["dataset_info"] = {
+                        "class_name": dataset_code_info.get("class_name"),
+                        "file_path": dataset_code_info.get("export_path"),
+                        "module_name": dataset_code_info.get("module_name"),
+                    }
+                    if dataset_code_info.get("export_path"):
+                        result["working_dir"] = os.path.dirname(dataset_code_info["export_path"])
+                    logger.info(f"✅ Loaded database_code from metadata file: {dataset_code_info.get('class_name')}")
+                    
+                    # Re-register it for future use
+                    object_registry.register(dict, "database_code", dataset_code_info, overwrite=True)
+                else:
+                    logger.warning(f"⚠️ Dataset metadata file not found: {metadata_file}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not load dataset metadata from file: {e}")
             pass
         
-        # Try to get task code info
+        # Try to get task code info from registry
         try:
             task_code_info = object_registry.get(dict, "task_code")
             result["task_info"] = {
@@ -921,8 +980,35 @@ def get_dataset_task_info_from_registry() -> Dict[str, Any]:
                 "entity_table": task_code_info.get("entity_table"),
                 "target_col": task_code_info.get("target_col"),
             }
+            logger.info(f"✅ Found task_code in registry: {task_code_info.get('class_name')}")
         except KeyError:
-            pass
+            logger.warning("⚠️ task_code not found in registry. Attempting to load from file...")
+            
+            # Fallback: Try to load from task_metadata.json file
+            try:
+                working_dir = object_registry.get(str, "working_dir")
+                metadata_file = os.path.join(working_dir, "task_metadata.json")
+                
+                if os.path.exists(metadata_file):
+                    with open(metadata_file, 'r') as f:
+                        task_code_info = json.load(f)
+                    
+                    result["task_info"] = {
+                        "class_name": task_code_info.get("class_name"),
+                        "file_path": task_code_info.get("export_path"),
+                        "module_name": task_code_info.get("module_name"),
+                        "task_type": task_code_info.get("task_type"),
+                        "entity_table": task_code_info.get("entity_table"),
+                        "target_col": task_code_info.get("target_col"),
+                    }
+                    logger.info(f"✅ Loaded task_code from metadata file: {task_code_info.get('class_name')}")
+                    
+                    # Re-register it for future use
+                    object_registry.register(dict, "task_code", task_code_info, overwrite=True)
+                else:
+                    logger.warning(f"⚠️ Metadata file not found: {metadata_file}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not load task metadata from file: {e}")
         
         # Try to get working directory if not found
         if result["working_dir"] is None:

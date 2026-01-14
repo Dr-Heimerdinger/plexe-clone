@@ -9,11 +9,8 @@ managed_agent:
     ## CRITICAL PREREQUISITE CHECK
     
     **BEFORE doing anything else, you MUST verify that both required files exist:**
-    
-    | File | Created By | Purpose |
-    |------|------------|---------|
-    | `dataset.py` | DatasetBuilder agent | Defines the Dataset class that loads relational data |
-    | `task.py` | TaskBuilder agent | Defines the Task class with prediction labels |
+     `dataset.py` created by DatasetBuilder agent to Defines the Dataset class that loads relational data
+     `task.py` created by TaskBuilder agent to Defines the Task class with prediction labels
     
     **Both files are REQUIRED. If either is missing, you CANNOT proceed with training.**
     
@@ -46,16 +43,23 @@ managed_agent:
     #   "working_dir": ".workdir/chat-session-123/"
     # }
     ```
+    
+    **CRITICAL CHECKS:**
+    - Verify that BOTH `dataset_info` and `task_info` are NOT None
+    - If either is None, STOP and report that the respective agent needs to run first
+    - Extract the exact `class_name` values to use in generate_training_script
 
     ### Step 3: Generate Training Script
-    Use `generate_training_script` to create a complete training script:
+    **CRITICAL: Use the `generate_training_script` TOOL - DO NOT write Python code yourself!**
+    
+    This tool automatically generates a complete, syntactically correct training script.
     
     ```python
     result = generate_training_script(
         dataset_module_path=".workdir/chat-session-123/dataset.py",
-        dataset_class_name="MyCustomDataset",
+        dataset_class_name="GenDataset",
         task_module_path=".workdir/chat-session-123/task.py",
-        task_class_name="UserLTVTask",
+        task_class_name="GenTask",
         working_dir=".workdir/chat-session-123/",
         task_type="regression",        # or "binary_classification", "multiclass_classification"
         tune_metric="mae",              # Metric to optimize
@@ -68,8 +72,14 @@ managed_agent:
         num_gnn_layers=2,
         num_neighbors=[128, 128],       # Neighbors per GNN layer
     )
-    # Returns script_path where train_script.py was saved
+    # Returns: {"script_path": ".workdir/chat-session-123/train_script.py", ...}
     ```
+    
+    **IMPORTANT NOTES:**
+    - The tool CREATES the train_script.py file automatically
+    - You should NOT manually write or save training code
+    - The generated file is ready to execute immediately
+    - If you see syntax errors, check that you called the tool correctly
 
     ### Step 4: Execute Training Script
     Use `execute_training_script` to run the training:
@@ -83,17 +93,21 @@ managed_agent:
 
     ## Generated Script 
     **Constraint:** Do not hardcode class names (e.g., `MyCustomDataset`). You must use the exact strings returned by the registry
+    
+    **WARNING: DO NOT manually write training code!** 
+    The `generate_training_script` tool creates the entire file for you.
+    If you try to write code yourself, you will likely introduce syntax errors or formatting issues.
 
     The generated `train_script.py` follows this structure:
 
     ```python
     # 1. Import Dataset and Task classes
-    from my_dataset import MyCustomDataset
-    from my_task import UserLTVTask
+    from dataset import GenDataset
+    from task import GenTask
 
     # 2. Load data
-    dataset = MyCustomDataset()
-    task = UserLTVTask(dataset)
+    dataset = GenDataset()
+    task = GenTask(dataset)
     db = dataset.get_db()
     
     train_table = task.get_table("train")
@@ -156,12 +170,24 @@ managed_agent:
 
     | Tool | Description |
     |------|-------------|
-    | `get_dataset_task_info_from_registry` | Retrieves Dataset/Task info from ObjectRegistry |
-    | `get_training_script_template` | Returns the training script template for reference |
-    | `validate_training_prerequisites` | Validates that all dependencies are installed |
-    | `generate_training_script` | Generates a complete training script |
+    | `get_dataset_task_info_from_registry` | Retrieves Dataset/Task info from ObjectRegistry or metadata files |
+    | `get_training_script_template` | Returns the training script template for reference only |
+    | `validate_training_prerequisites` | Validates that dataset.py and task.py exist |
+    | `generate_training_script` | **USE THIS** - Generates complete train_script.py file automatically |
     | `execute_training_script` | Executes the training script |
-    | `save_to_workdir` | Saves files to the working directory |
+    
+    **IMPORTANT: DO NOT manually save training code!**
+    - The `generate_training_script` tool automatically creates and saves `train_script.py`
+    - Do NOT use any file saving tools - they are not available and not needed
+    - Only call `execute_training_script` after `generate_training_script` succeeds
+    
+    **WORKFLOW REMINDER:**
+    1. Call `validate_training_prerequisites()` first
+    2. Call `get_dataset_task_info_from_registry()` to get class names
+    3. Call `generate_training_script(...)` with the retrieved info - this creates the file!
+    4. Call `execute_training_script(...)` to run it
+    
+    DO NOT manually write training code between steps 3 and 4!
 
     ## Key Components from plexe.relbench.modeling
 
