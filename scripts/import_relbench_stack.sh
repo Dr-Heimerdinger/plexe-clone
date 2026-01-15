@@ -1,9 +1,3 @@
-#!/bin/bash
-
-# =====================================================
-# Script import thuần SQL - không dùng Python
-# =====================================================
-
 set -e
 
 CONTAINER_NAME="plexe-clone-postgres-1"
