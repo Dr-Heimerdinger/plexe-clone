@@ -98,4 +98,4 @@ from plexe import Model
 print("✓ plexe import OK")
 EOF
  
-CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "plexe"]
+CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8100", "--reload", "--reload-dir", "plexe"]
