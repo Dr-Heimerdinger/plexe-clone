@@ -1,0 +1,2 @@
+I am working with the data is loaded into the `hm` database (connection string: `postgresql+psycopg2://mlflow:mlflow@postgres:5432/hm`).
+I want to define a predictive task on this relational database.

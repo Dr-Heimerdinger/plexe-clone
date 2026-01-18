@@ -12,7 +12,7 @@ LOG_FILE="$LOG_DIR/import_$(date +%Y%m%d_%H%M%S).log"
 
 # Cấu hình sample size
 SAMPLE_SIZE=5000  # Mục tiêu số bản ghi tổng
-MAX_SEED_RECORDS=2000  # Số bản ghi seed ban đầu từ bảng chính
+MAX_SEED_RECORDS=5000  # Số bản ghi seed ban đầu từ bảng chính
 
 # Hàm log - ghi cả ra console và file
 log() {
@@ -450,20 +450,46 @@ def get_foreign_keys(conn):
     cur.close()
     return dict(fks), dict(reverse_fks)
 
-def find_central_table(tables, fks, reverse_fks):
-    """Tìm bảng trung tâm (bảng có nhiều quan hệ nhất)"""
+def find_central_table(tables, fks, reverse_fks, pk_columns):
+    """Find central table - prioritize fact tables with multiple FKs for better sampling"""
+    import math
     scores = {}
+    
+    print("\nAnalyzing table importance for sampling...")
     for table in tables:
         # Điểm = số FK đi ra + số FK đi vào
         outgoing = len(fks.get(table, []))
         incoming = len(reverse_fks.get(table, []))
-        scores[table] = outgoing + incoming
+        
+        # PRIORITIZE FACT TABLES (tables with 2+ FKs) - these connect dimensions
+        # Example: review table connects customer + product
+        if outgoing >= 2:
+            fk_score = 10000 + (outgoing * 1000)  # Huge bonus for fact tables
+        else:
+            fk_score = outgoing * 100
+        
+        # Add points for being referenced by other tables
+        fk_score += incoming * 50
+        
+        # Prefer tables with primary key (easier to track)
+        has_pk = pk_columns.get(table, 'ctid') != 'ctid'
+        pk_bonus = 500 if has_pk else 0
+        
+        # Consider table size - prefer tables with data
+        size_score = math.log10(tables.get(table, 0) + 1) * 10 if tables.get(table, 0) > 0 else 0
+        
+        total_score = fk_score + pk_bonus + size_score
+        scores[table] = total_score
+        
+        print(f"  {table:20s}: FKs={outgoing}, reverse={incoming}, PK={has_pk}, rows={tables.get(table, 0):,}, score={total_score:.0f}")
     
-    # Sắp xếp theo điểm và số lượng bản ghi
-    sorted_tables = sorted(scores.items(), key=lambda x: (x[1], tables.get(x[0], 0)), reverse=True)
+    # Sắp xếp theo điểm
+    sorted_tables = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     
     if sorted_tables:
-        return sorted_tables[0][0]
+        selected = sorted_tables[0][0]
+        print(f"\nSelected central table: {selected} (score={sorted_tables[0][1]:.0f})")
+        return selected
     return list(tables.keys())[0] if tables else None
 
 def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
@@ -479,10 +505,7 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
     
     print(f"\nFound {sum(len(v) for v in fks.values())} foreign key relationships")
     
-    central_table = find_central_table(tables, fks, reverse_fks)
-    print(f"\nCentral table identified: {central_table}")
-    
-    # Get primary keys for all tables
+    # Get primary keys for all tables FIRST (needed for central table selection)
     cur = conn.cursor()
     pk_columns = {}
     for table in tables:
@@ -496,9 +519,11 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
         if pk_result:
             pk_columns[table] = pk_result[0]
         else:
-            # Fallback: use first column
-            cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' LIMIT 1")
-            pk_columns[table] = cur.fetchone()[0]
+            # Fallback: use ctid (system column) for tables without primary key
+            pk_columns[table] = 'ctid'
+    
+    central_table = find_central_table(tables, fks, reverse_fks, pk_columns)
+    print(f"\nCentral table identified: {central_table} (PK: {pk_columns.get(central_table, 'none')})")
     
     # Tạo temporary tables để lưu IDs đã chọn
     sampled_ids = defaultdict(set)
@@ -509,31 +534,59 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
     # Bước 1: Lấy seed records từ bảng trung tâm
     print(f"\nStep 1: Sampling {seed_records} seed records from {central_table}...")
     
-    # Lấy primary key của bảng trung tâm
-    cur.execute(f"""
-        SELECT a.attname
-        FROM pg_index i
-        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-        WHERE i.indrelid = '{central_table}'::regclass AND i.indisprimary
-    """)
-    pk_col = cur.fetchone()
-    if pk_col:
-        pk_col = pk_col[0]
+    pk_col = pk_columns[central_table]
+    
+    # Sample random records - for tables without PK, use ctid
+    if pk_col == 'ctid':
+        # For tables without PK (fact tables), sample and immediately get referenced dimension records
+        cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{central_table}' ORDER BY ordinal_position")
+        all_columns = [row[0] for row in cur.fetchall()]
+        columns_str = ', '.join(all_columns)
+        
+        # Use TABLESAMPLE for better performance on large tables
+        cur.execute(f"""
+            SELECT {columns_str} FROM {central_table}
+            TABLESAMPLE SYSTEM (1)  -- Sample ~1% of pages
+            LIMIT {seed_records}
+        """)
+        # Store tuples of all column values
+        seed_ids = [row for row in cur.fetchall()]
+        sampled_ids[central_table] = set(seed_ids)
+        print(f"  Sampled {len(seed_ids)} records from {central_table} (no PK - using full row)")
+        
+        # CRITICAL: Extract FK values to get referenced dimension records
+        col_name_to_idx = {col: idx for idx, col in enumerate(all_columns)}
+        
+        for fk in fks.get(central_table, []):
+            to_table = fk['to_table']
+            from_col = fk['from_col']
+            to_col = fk['to_col']
+            
+            # Extract FK values from sampled rows
+            fk_col_idx = col_name_to_idx.get(from_col)
+            if fk_col_idx is not None:
+                fk_values = set()
+                for row in seed_ids:
+                    if row[fk_col_idx] is not None:
+                        fk_values.add(row[fk_col_idx])
+                
+                if fk_values:
+                    sampled_ids[to_table] = fk_values
+                    visited_tables.add(to_table)
+                    total_records += len(fk_values)
+                    print(f"    -> Collected {len(fk_values)} {to_table} records (via {from_col})")
+        
+        total_records = len(seed_ids)
     else:
-        # Fallback to first column
-        cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{central_table}' LIMIT 1")
-        pk_col = cur.fetchone()[0]
-    
-    # Sample random records
-    cur.execute(f"""
-        SELECT {pk_col} FROM {central_table}
-        ORDER BY RANDOM()
-        LIMIT {seed_records}
-    """)
-    
-    seed_ids = [row[0] for row in cur.fetchall()]
-    sampled_ids[central_table] = set(seed_ids)
-    print(f"  Sampled {len(seed_ids)} records from {central_table}")
+        cur.execute(f"""
+            SELECT {pk_col} FROM {central_table}
+            TABLESAMPLE SYSTEM (1)
+            LIMIT {seed_records}
+        """)
+        seed_ids = [row[0] for row in cur.fetchall()]
+        sampled_ids[central_table] = set(seed_ids)
+        print(f"  Sampled {len(seed_ids)} records from {central_table}")
+        total_records = len(seed_ids)
     
     # Bước 2: BFS để lấy các bản ghi liên quan
     queue = deque([(central_table, seed_ids)])
@@ -592,6 +645,7 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
                         visited_tables.add(to_table)
             except Exception as e:
                 print(f"    -> {to_table}: Error - {e}")
+                conn.rollback()  # Rollback transaction on error
                 continue
         
         # Lấy bảng con (reverse FK) - giới hạn số lượng để tránh quá nhiều
@@ -611,25 +665,19 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
             limit = min(500, sample_size - total_records)  # Giới hạn mỗi lần lấy 500 records
             
             try:
-                # Lấy primary key của bảng con
-                cur.execute(f"""
-                    SELECT a.attname
-                    FROM pg_index i
-                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-                    WHERE i.indrelid = '{from_table}'::regclass AND i.indisprimary
-                """)
-                child_pk_result = cur.fetchone()
-                if child_pk_result:
-                    child_pk_col = child_pk_result[0]
-                else:
-                    cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{from_table}' LIMIT 1")
-                    child_pk_col = cur.fetchone()[0]
+                child_pk_col = pk_columns.get(from_table)
+                
+                # For tables without PK, we can't track by ID - skip them in reverse FK traversal
+                # They will be sampled based on FK constraints later
+                if child_pk_col == 'ctid':
+                    print(f"    <- {from_table}: Skipped (no PK - will sample by FK constraint)")
+                    continue
                 
                 cur.execute(f"""
                     SELECT DISTINCT {child_pk_col}
                     FROM {from_table}
-                    WHERE {to_col} IS NOT NULL
-                    AND {to_col} IN ({ids_str})
+                    WHERE {from_col} IS NOT NULL
+                    AND {from_col} IN ({ids_str})
                     LIMIT {limit}
                 """)
                 
@@ -646,30 +694,117 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
                         visited_tables.add(from_table)
             except Exception as e:
                 print(f"    <- {from_table}: Error - {e}")
+                conn.rollback()  # Rollback transaction on error
                 continue
     
-    # Bước 2.5: Validate và clean orphaned foreign keys
-    print(f"\nStep 2.5: Validating foreign key integrity...")
-    cleaned_count = 0
+    # Bước 2.3: Sample tables without primary keys based on FK relationships
+    print(f"\nStep 2.3: Sampling tables without primary keys...")
+    for table in tables:
+        if pk_columns.get(table) != 'ctid':
+            continue  # Skip tables with primary keys
+        
+        if table in sampled_ids and sampled_ids[table]:
+            continue  # Already sampled
+        
+        # Sample records from this table based on foreign key relationships
+        if table in fks and fks[table]:
+            print(f"  Processing {table} (no PK)...")
+            
+            # Build WHERE clause based on all FKs
+            where_conditions = []
+            for fk in fks[table]:
+                to_table = fk['to_table']
+                from_col = fk['from_col']
+                
+                if to_table in sampled_ids and sampled_ids[to_table]:
+                    ids_str = format_ids_for_sql(list(sampled_ids[to_table]))
+                    if ids_str and ids_str != "''":
+                        where_conditions.append(f"{from_col} IN ({ids_str})")
+            
+            if where_conditions:
+                limit = min(1000, sample_size - total_records)
+                where_clause = " OR ".join(where_conditions)
+                
+                try:
+                    # Get all columns for this table
+                    cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' ORDER BY ordinal_position")
+                    all_columns = [row[0] for row in cur.fetchall()]
+                    columns_str = ', '.join(all_columns)
+                    
+                    cur.execute(f"""
+                        SELECT {columns_str}
+                        FROM {table}
+                        WHERE {where_clause}
+                        LIMIT {limit}
+                    """)
+                    
+                    rows = cur.fetchall()
+                    if rows:
+                        # Store as tuples (can't use IDs for tables without PK)
+                        sampled_ids[table] = set(rows)
+                        total_records += len(rows)
+                        print(f"    {table}: +{len(rows)} records (total: {len(rows)})")
+                        
+                        # IMPORTANT: Collect referenced entities from these rows
+                        # Map column names to indices
+                        col_name_to_idx = {col: idx for idx, col in enumerate(all_columns)}
+                        
+                        for fk in fks[table]:
+                            to_table = fk['to_table']
+                            from_col = fk['from_col']
+                            to_col = fk['to_col']
+                            
+                            # Skip if target table doesn't have PK (can't collect them)
+                            if pk_columns.get(to_table) == 'ctid':
+                                continue
+                            
+                            # Extract foreign key values from sampled rows
+                            fk_col_idx = col_name_to_idx.get(from_col)
+                            if fk_col_idx is not None:
+                                fk_values = set()
+                                for row in rows:
+                                    if row[fk_col_idx] is not None:
+                                        fk_values.add(row[fk_col_idx])
+                                
+                                # Add these to sampled_ids for the referenced table
+                                if fk_values:
+                                    new_fk_values = fk_values - sampled_ids.get(to_table, set())
+                                    if new_fk_values:
+                                        if to_table not in sampled_ids:
+                                            sampled_ids[to_table] = set()
+                                        sampled_ids[to_table].update(new_fk_values)
+                                        total_records += len(new_fk_values)
+                                        print(f"      -> {to_table}: +{len(new_fk_values)} records (from {from_col})")
+                except Exception as e:
+                    print(f"    {table}: Error - {e}")
+                    conn.rollback()  # Rollback transaction on error
+    
+    # Bước 2.5: Validate và ensure FK integrity by adding missing referenced records
+    print(f"\nStep 2.5: Ensuring foreign key integrity...")
+    added_count = 0
     max_iterations = 10
     
     for iteration in range(max_iterations):
-        removed_this_iteration = 0
+        added_this_iteration = 0
         
         for table in list(sampled_ids.keys()):
+            # Skip tables without primary keys - can't validate them the same way
+            if pk_columns.get(table) == 'ctid':
+                continue
+                
             if table not in fks or not fks[table]:
                 continue
                 
-            ids_to_remove = set()
             ids_list = list(sampled_ids[table])
             
-            # Check each FK constraint
+            # Check each FK constraint and ADD missing referenced records
             for fk in fks[table]:
                 to_table = fk['to_table']
-                from_col = fk['from_col']  # Fixed: was 'from_column'
+                from_col = fk['from_col']
+                to_col = fk['to_col']
                 
-                # Skip if target table has no sampled data
-                if to_table not in sampled_ids or not sampled_ids[to_table]:
+                # Skip if target table has no primary key
+                if pk_columns.get(to_table) == 'ctid':
                     continue
                 
                 # Get FK values for sampled records
@@ -677,42 +812,41 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
                 if not ids_str or ids_str == "''":
                     continue
                 
-                target_ids_str = format_ids_for_sql(list(sampled_ids[to_table]))
-                if not target_ids_str or target_ids_str == "''":
-                    continue
-                    
                 try:
-                    # Find records with FK values not in target table's sampled IDs
+                    # Find FK values that are NOT in the sampled set
                     cur.execute(f"""
-                        SELECT DISTINCT t.{pk_columns[table]}
+                        SELECT DISTINCT t.{from_col}
                         FROM {table} t
                         WHERE t.{pk_columns[table]} IN ({ids_str})
                         AND t.{from_col} IS NOT NULL
-                        AND t.{from_col}::text NOT IN (
-                            SELECT {pk_columns[to_table]}::text FROM {to_table}
-                            WHERE {pk_columns[to_table]} IN ({target_ids_str})
-                        )
                     """)
-                    orphaned = cur.fetchall()
-                    for row in orphaned:
-                        ids_to_remove.add(row[0])
+                    
+                    fk_values = set(row[0] for row in cur.fetchall())
+                    
+                    # Find which ones are missing from sampled_ids
+                    existing_ids = sampled_ids.get(to_table, set())
+                    missing_ids = fk_values - existing_ids
+                    
+                    if missing_ids:
+                        # Add these missing IDs to the sample
+                        if to_table not in sampled_ids:
+                            sampled_ids[to_table] = set()
+                        sampled_ids[to_table].update(missing_ids)
+                        added_this_iteration += len(missing_ids)
+                        added_count += len(missing_ids)
+                        print(f"  {table}.{from_col} -> {to_table}: +{len(missing_ids)} referenced records")
+                        
                 except Exception as e:
-                    print(f"  Warning: Could not validate FK {table}.{from_col} -> {to_table}: {e}")
+                    print(f"  Warning: Could not check FK {table}.{from_col} -> {to_table}: {e}")
+                    conn.rollback()
                     continue
-            
-            # Remove orphaned records
-            if ids_to_remove:
-                sampled_ids[table] -= ids_to_remove
-                removed_this_iteration += len(ids_to_remove)
-                cleaned_count += len(ids_to_remove)
-                print(f"  {table}: removed {len(ids_to_remove)} orphaned records")
         
-        if removed_this_iteration == 0:
+        if added_this_iteration == 0:
             print(f"  Validation complete after {iteration + 1} iteration(s)")
             break
     
-    if cleaned_count > 0:
-        print(f"\nTotal orphaned records removed: {cleaned_count}")
+    if added_count > 0:
+        print(f"\nTotal FK-referenced records added: {added_count}")
         total_records = sum(len(ids) for ids in sampled_ids.values())
         print(f"Clean sample size: {total_records} records")
     else:
@@ -780,24 +914,54 @@ def create_sample_sql(conn, db_name, target_db, sample_size, seed_records):
         
         sql_lines.append(f"-- Table: {table} ({len(ids)} records)")
         
-        # Lấy dữ liệu thực tế từ database
-        ids_str = format_ids_for_sql(list(ids))
-        if not ids_str or ids_str == "''":
-            print(f"  Skipping {table} - no valid IDs")
-            continue
-            
-        query = f"""
-            SELECT {', '.join(col_names)}
-            FROM {table}
-            WHERE {pk_col} IN ({ids_str})
-        """
+        pk_col = pk_columns.get(table)
         
-        try:
-            cur.execute(query)
-            rows = cur.fetchall()
-        except Exception as e:
-            print(f"  Error querying {table}: {e}")
-            continue
+        # For tables without primary key, data is already stored as full rows
+        if pk_col == 'ctid':
+            # Lấy danh sách các cột
+            cur.execute(f"""
+                SELECT column_name, data_type
+                FROM information_schema.columns 
+                WHERE table_name = '{table}'
+                AND table_schema = 'public'
+                ORDER BY ordinal_position
+            """)
+            columns = cur.fetchall()
+            col_names = [col[0] for col in columns]
+            
+            # ids already contains full row tuples
+            rows = list(ids)
+        else:
+            # For tables with primary key, query by PK
+            # Lấy danh sách các cột
+            cur.execute(f"""
+                SELECT column_name, data_type
+                FROM information_schema.columns 
+                WHERE table_name = '{table}'
+                AND table_schema = 'public'
+                ORDER BY ordinal_position
+            """)
+            columns = cur.fetchall()
+            col_names = [col[0] for col in columns]
+            
+            # Lấy dữ liệu thực tế từ database
+            ids_str = format_ids_for_sql(list(ids))
+            if not ids_str or ids_str == "''":
+                print(f"  Skipping {table} - no valid IDs")
+                continue
+                
+            query = f"""
+                SELECT {', '.join(col_names)}
+                FROM {table}
+                WHERE {pk_col} IN ({ids_str})
+            """
+            
+            try:
+                cur.execute(query)
+                rows = cur.fetchall()
+            except Exception as e:
+                print(f"  Error querying {table}: {e}")
+                continue
         
         # Tạo INSERT statements
         if rows:

@@ -6,6 +6,7 @@ Support any RelBench dataset: rel-f1, rel-amazon, rel-hm, rel-stack, etc.
 
 import os
 import sys
+import csv
 import argparse
 import pandas as pd
 from relbench.datasets import get_dataset
@@ -180,7 +181,7 @@ def generate_complete_sql(db, dataset_name):
     
     for table_name in db.table_dict.keys():
         sql_parts.append(f"\\echo '   Importing {table_name}...'")
-        sql_parts.append(f"\\copy temp_{table_name} FROM '/tmp/{table_name}.csv' WITH CSV HEADER DELIMITER ',';")
+        sql_parts.append(f"\\copy temp_{table_name} FROM '/tmp/{table_name}.csv' WITH (FORMAT CSV, HEADER, DELIMITER ',', QUOTE '\"');")
         sql_parts.append("")
     
     sql_parts.append("\\echo 'CSV imported to temp tables'")
@@ -310,7 +311,33 @@ Supported datasets:
     print("Exporting CSV files...")
     for table_name, table in db.table_dict.items():
         csv_path = output_dir / f"{table_name}.csv"
-        table.df.to_csv(csv_path, index=False)
+        # Convert any list/array columns to strings and clean problematic characters
+        df_export = table.df.copy()
+        for col in df_export.columns:
+            if df_export[col].dtype == 'object':
+                # Convert all object types to clean strings
+                def clean_value(x):
+                    import numpy as np
+                    # Handle None
+                    if x is None:
+                        return ''
+                    # Handle numpy arrays and lists first (before pd.isna which fails on arrays)
+                    if isinstance(x, (list, dict, tuple, np.ndarray)):
+                        return str(x)
+                    # Now safe to check isna for scalar values
+                    try:
+                        if pd.isna(x):
+                            return ''
+                    except (ValueError, TypeError):
+                        pass
+                    # Convert to string and remove problematic characters
+                    s = str(x)
+                    # Replace newlines and carriage returns with space
+                    s = s.replace('\n', ' ').replace('\r', ' ')
+                    return s
+                df_export[col] = df_export[col].apply(clean_value)
+        # Use QUOTE_MINIMAL with escapechar to handle special characters properly
+        df_export.to_csv(csv_path, index=False, quoting=csv.QUOTE_MINIMAL, doublequote=True)
         print(f"   {table_name}.csv ({len(table.df):,} rows)")
     print()
     
