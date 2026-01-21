@@ -3,8 +3,7 @@ Tools for dataset manipulation, splitting, and registration.
 
 These tools help with dataset operations within the model generation pipeline, including
 splitting datasets into training, validation, and test sets, registering datasets with
-the dataset registry, creating sample data for validation, previewing dataset content,
-registering exploratory data analysis (EDA) reports, and registering feature engineering results.
+the dataset registry, creating sample data for validation, and previewing dataset content.
 """
 
 import logging
@@ -603,113 +602,6 @@ def get_dataset_preview(dataset_name: str) -> Dict[str, Any]:
 
 
 @tool
-def register_eda_report(
-    dataset_name: str,
-    overview: Dict[str, Any],
-    feature_engineering_opportunities: Dict[str, Any],
-    data_quality_challenges: Dict[str, Any],
-    data_preprocessing_requirements: Dict[str, Any],
-    feature_importance: Dict[str, Any],
-    insights: List[str],
-    recommendations: List[str],
-) -> str:
-    """
-    Register an exploratory data analysis (EDA) report for a dataset in the Object Registry.
-
-    This tool creates a structured report with actionable ML engineering insights from exploratory
-    data analysis and registers it in the Object Registry for use by other agents.
-
-    Args:
-        dataset_name: Name of the dataset that was analyzed
-        overview: Essential dataset statistics including target variable analysis
-        feature_engineering_opportunities: Specific transformation needs, interaction effects,
-                                          and engineered features that would improve model performance
-        data_quality_challenges: Critical data issues with specific handling recommendations
-        data_preprocessing_requirements: Necessary preprocessing steps with clear justification
-        feature_importance: Assessment of feature predictive potential and relevance
-        insights: Key insights derived from the analysis that directly impact feature engineering
-        recommendations: Specific, prioritized actions for preprocessing and feature engineering
-
-    Returns:
-        A string indicating success or failure of the registration
-    """
-    object_registry = ObjectRegistry()
-
-    try:
-        # Create structured EDA report with actionable ML focus
-        eda_report = {
-            "dataset_name": dataset_name,
-            "timestamp": datetime.now().isoformat(),
-            "overview": overview,
-            "feature_engineering_opportunities": feature_engineering_opportunities,
-            "data_quality_challenges": data_quality_challenges,
-            "data_preprocessing_requirements": data_preprocessing_requirements,
-            "feature_importance": feature_importance,
-            "insights": insights,
-            "recommendations": recommendations,
-        }
-
-        # TODO: separate EDA reports for raw and transformed data
-        # Register in registry
-        object_registry.register(dict, f"eda_report_{dataset_name}", eda_report, overwrite=True)
-        logger.debug(f"✅ Registered EDA report for dataset '{dataset_name}'")
-        return f"Successfully registered EDA report for dataset '{dataset_name}'"
-
-    except Exception as e:
-        logger.warning(f"⚠️ Error registering EDA report: {str(e)}")
-        raise RuntimeError(f"Failed to register EDA report for dataset '{dataset_name}': {str(e)}")
-
-
-@tool
-def register_feature_engineering_report(
-    dataset_name: str,
-    overview: Dict[str, Any],
-    feature_catalog: Dict[str, Any],
-    feature_importance: Dict[str, Any],
-    insights: List[str],
-    recommendations: List[str],
-) -> str:
-    """
-    Register a feature engineering report for a transformed dataset. This tool registers a structured report with
-    actionable insights from feature engineering for use by other agents. The purpose is to ensure that the features
-    created during feature engineering are well-documented.
-
-    Args:
-        dataset_name: Name of the dataset that was analyzed
-        overview: Essential dataset statistics including target variable analysis
-        feature_catalog: Catalog of engineered features with descriptions and transformations
-        feature_importance: Assessment of feature predictive potential and relevance
-        insights: Key insights derived from the analysis that directly impact feature engineering
-        recommendations: Specific, prioritized actions for preprocessing and feature engineering
-
-    Returns:
-        A string indicating success or failure of the registration
-    """
-    object_registry = ObjectRegistry()
-
-    try:
-        # Create structured feature engineering report
-        fe_report = {
-            "dataset_name": dataset_name,
-            "timestamp": datetime.now().isoformat(),
-            "overview": overview,
-            "feature_catalog": feature_catalog,
-            "feature_importance": feature_importance,
-            "insights": insights,
-            "recommendations": recommendations,
-        }
-
-        # Register in registry
-        object_registry.register(dict, f"fe_report_{dataset_name}", fe_report, overwrite=True)
-        logger.debug(f"✅ Registered Feature Engineering report for dataset '{dataset_name}'")
-        return f"Successfully registered Feature Engineering report for dataset '{dataset_name}'"
-
-    except Exception as e:
-        logger.warning(f"⚠️ Error registering Feature Engineering report: {str(e)}")
-        raise RuntimeError(f"Failed to register Feature Engineering report for dataset '{dataset_name}': {str(e)}")
-
-
-@tool
 def get_latest_datasets() -> Dict[str, Any]:
     """
     Get the most recent version of each dataset in the pipeline. Automatically detects transformed
@@ -790,62 +682,6 @@ def get_latest_datasets() -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"⚠️ Error getting latest datasets: {str(e)}")
         return {}
-
-
-@tool
-def get_dataset_for_splitting() -> str:
-    """
-    Get the most appropriate dataset for splitting. Returns transformed version if available,
-    otherwise raw. Use this tool to get the dataset that needs to be split.
-
-    Returns:
-        Name of the dataset to split
-
-    Raises:
-        ValueError: If no suitable dataset is found for splitting
-    """
-    object_registry = ObjectRegistry()
-
-    try:
-        all_datasets = object_registry.list_by_type(TabularConvertible)
-
-        # First, check if splits already exist
-        has_splits = any(d.endswith(("_train", "_val", "_test")) for d in all_datasets)
-
-        # Prefer transformed datasets that haven't been split yet
-        transformed_unsplit = [
-            d
-            for d in all_datasets
-            if d.endswith("_transformed")
-            and not any(f"{d}_{split}" in all_datasets for split in ["train", "val", "test"])
-        ]
-        if transformed_unsplit:
-            # Return the most recent (last) one
-            return transformed_unsplit[-1]
-
-        # If no unsplit transformed datasets, check for raw datasets that haven't been split
-        raw_unsplit = [
-            d
-            for d in all_datasets
-            if not any(suffix in d for suffix in ["_train", "_val", "_test", "_transformed"])
-            and not any(f"{d}_{split}" in all_datasets for split in ["train", "val", "test"])
-        ]
-
-        if raw_unsplit:
-            return raw_unsplit[-1]
-
-        # If everything has been split, raise an informative error
-        if has_splits:
-            raise ValueError("All datasets have already been split. No unsplit datasets available.")
-        else:
-            raise ValueError("No datasets available for splitting. Ensure datasets have been registered.")
-
-    except ValueError:
-        # Re-raise ValueError as is
-        raise
-    except Exception as e:
-        logger.warning(f"⚠️ Error finding dataset for splitting: {str(e)}")
-        raise ValueError(f"Failed to find dataset for splitting: {str(e)}")
 
 
 @tool

@@ -43,7 +43,7 @@ managed_agent:
        - Retrieves comprehensive schema metadata optimized for RDL:
          - **Tables**: Each table includes columns with normalized modalities (Numeric, Categorical, Temporal, Text, Binary),
            row_count, table_type (Fact/Dimension), and temporal column information
-         - **Temporal Columns**: Identifies timestamp columns (τ_v) critical for time-aware message passing
+         - **Temporal Columns**: Identifies timestamp columns critical for time-aware message passing
          - **Table Classification**: Classifies tables as Fact (event/transaction) or Dimension (entity/reference)
          - **Relationships**: Foreign key relationships with support for composite keys
        - Uses cache automatically - only queries DB if cache miss.

@@ -11,14 +11,6 @@ from typing import List, Dict, Optional, Callable
 
 from smolagents import CodeAgent, LiteLLMModel, AgentText
 
-from plexe.agents.dataset_analyser import EdaAgent
-from plexe.agents.dataset_splitter import DatasetSplitterAgent
-from plexe.agents.feature_engineer import FeatureEngineeringAgent
-from plexe.agents.model_packager import ModelPackagerAgent
-from plexe.agents.model_planner import ModelPlannerAgent
-from plexe.agents.model_tester import ModelTesterAgent
-from plexe.agents.model_trainer import ModelTrainerAgent
-from plexe.agents.schema_resolver import SchemaResolverAgent
 from plexe.agents.relational_graph_architect import RelationalGraphArchitectAgent
 from plexe.agents.relational_gnn_specialist import RelationalGNNSpecialistAgent
 from plexe.agents.dataset_builder import DatasetBuilderAgent
@@ -116,68 +108,6 @@ class PlexeAgent:
         self.orchestrator_verbosity = 1 if verbose else 0
         self.specialist_verbosity = 1 if verbose else 0
 
-        # Create solution planner agent - plans ML approaches
-        self.ml_research_agent = ModelPlannerAgent(
-            model_id=self.ml_researcher_model_id,
-            verbose=verbose,
-            chain_of_thought_callable=chain_of_thought_callable,
-            max_solutions=max_solutions,
-        ).agent
-
-        # Create and run the schema resolver agent
-        self.schema_resolver_agent = SchemaResolverAgent(
-            model_id=self.orchestrator_model_id,
-            verbose=verbose,
-            chain_of_thought_callable=chain_of_thought_callable,
-        ).agent
-
-        # Create the EDA agent to analyze the dataset
-        self.eda_agent = EdaAgent(
-            model_id=self.orchestrator_model_id,
-            verbose=verbose,
-            chain_of_thought_callable=chain_of_thought_callable,
-        ).agent
-
-        # Create feature engineering agent - transforms raw datasets for better model performance
-        self.feature_engineering_agent = FeatureEngineeringAgent(
-            model_id=self.ml_engineer_model_id,
-            verbose=verbose,
-            chain_of_thought_callable=self.chain_of_thought_callable,
-        ).agent
-
-        # Create dataset splitter agent - intelligently splits datasets
-        self.dataset_splitter_agent = DatasetSplitterAgent(
-            model_id=self.orchestrator_model_id,
-            verbose=verbose,
-            chain_of_thought_callable=self.chain_of_thought_callable,
-        ).agent
-
-        # Create model trainer agent - implements training code
-        self.mle_agent = ModelTrainerAgent(
-            ml_engineer_model_id=self.ml_engineer_model_id,
-            tool_model_id=self.tool_model_id,
-            distributed=self.distributed,
-            verbose=verbose,
-            chain_of_thought_callable=self.chain_of_thought_callable,
-            schema_resolver_agent=self.schema_resolver_agent,
-        ).agent
-
-        # Create predictor builder agent - creates inference code
-        self.mlops_engineer = ModelPackagerAgent(
-            model_id=self.ml_ops_engineer_model_id,
-            tool_model_id=self.tool_model_id,
-            verbose=verbose,
-            chain_of_thought_callable=self.chain_of_thought_callable,
-            schema_resolver_agent=self.schema_resolver_agent,
-        ).agent
-
-        # Create model tester agent - tests and evaluates the finalized model
-        self.model_tester_agent = ModelTesterAgent(
-            model_id=self.ml_engineer_model_id,
-            verbose=verbose,
-            chain_of_thought_callable=self.chain_of_thought_callable,
-        ).agent
-
         # Create Relational Graph Architect Agent
         self.relational_graph_architect_agent = RelationalGraphArchitectAgent(
             model_id=self.ml_engineer_model_id,
@@ -208,14 +138,6 @@ class PlexeAgent:
 
         # Define managed agents
         managed_agents = [
-            self.eda_agent,
-            self.schema_resolver_agent,
-            self.feature_engineering_agent,
-            self.ml_research_agent,
-            self.dataset_splitter_agent,
-            self.mle_agent,
-            self.mlops_engineer,
-            self.model_tester_agent,
             self.relational_graph_architect_agent,
             self.relational_gnn_specialist_agent,
             self.dataset_builder_agent,

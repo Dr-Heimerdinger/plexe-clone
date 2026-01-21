@@ -220,26 +220,6 @@ class _PromptTemplates:
             "schemas/generate_from_intent.jinja", intent=intent, input_schema=input_schema, output_schema=output_schema
         )
 
-    def schema_resolver_prompt(
-        self, intent, datasets, input_schema=None, output_schema=None, has_input_schema=False, has_output_schema=False
-    ) -> str:
-        return self._render(
-            "agent/schema_resolver_prompt.jinja",
-            intent=intent,
-            datasets=datasets,
-            input_schema=input_schema,
-            output_schema=output_schema,
-            has_input_schema=has_input_schema,
-            has_output_schema=has_output_schema,
-        )
-
-    def eda_agent_prompt(self, intent, datasets) -> str:
-        return self._render(
-            "agent/agent_data_analyser_prompt.jinja",
-            intent=intent,
-            datasets=datasets,
-        )
-
     def training_system(self) -> str:
         return self._render("training/system_prompt.jinja")
 
