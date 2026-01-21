@@ -61,7 +61,7 @@ RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_co
 # ----------------------------
 # BƯỚC 5: torch-geometric
 # ----------------------------
-RUN uv pip install torch-geometric
+RUN uv pip install torch-geometric torch-frame
 
 # ----------------------------
 # BƯỚC 6: sentence-transformers (for text embeddings in GNN training)

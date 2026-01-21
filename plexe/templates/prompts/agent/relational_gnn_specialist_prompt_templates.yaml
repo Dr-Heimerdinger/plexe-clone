@@ -33,7 +33,7 @@ managed_agent:
 
     ### Step 2: Retrieve Dataset and Task Information
     Only after validation passes, use `get_dataset_task_info_from_registry` to get class names:
-    
+    Example:
     ```python
     info = get_dataset_task_info_from_registry()
     # Returns:

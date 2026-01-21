@@ -1,8 +1,8 @@
 import duckdb
 import pandas as pd
 
-from relbench.base import Database, EntityTask, RecommendationTask, Table, TaskType
-from relbench.metrics import (
+from ..base import Database, EntityTask, RecommendationTask, Table, TaskType
+from ..metrics import (
     accuracy,
     average_precision,
     f1,
@@ -75,9 +75,9 @@ class DriverDNFTask(EntityTask):
     entity_table = "drivers"
     time_col = "date"
     target_col = "did_not_finish"
-    timedelta = pd.Timedelta(days=30)
+    timedelta = pd.Timedelta(days=15) # gr: 30
     metrics = [average_precision, accuracy, f1, roc_auc]
-    num_eval_timestamps = 40
+    num_eval_timestamps = 3 # gr: 40
 
     def make_table(self, db: Database, timestamps: "pd.Series[pd.Timestamp]") -> Table:
         timestamp_df = pd.DataFrame({"timestamp": timestamps})

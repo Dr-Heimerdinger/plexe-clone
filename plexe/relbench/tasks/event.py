@@ -1,8 +1,8 @@
 import duckdb
 import pandas as pd
 
-from relbench.base import Database, EntityTask, Table, TaskType
-from relbench.metrics import accuracy, average_precision, f1, mae, r2, rmse, roc_auc
+from ..base import Database, EntityTask, Table, TaskType
+from ..metrics import accuracy, average_precision, f1, mae, r2, rmse, roc_auc
 
 
 class UserAttendanceTask(EntityTask):

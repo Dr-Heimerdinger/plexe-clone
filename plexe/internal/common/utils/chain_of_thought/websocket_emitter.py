@@ -119,6 +119,10 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
             agent_name: The name of the agent emitting the thought
             message: The thought message
         """
+        # Check if closed before emitting
+        if self.is_closed:
+            raise RuntimeError("Agent execution stopped by user")
+            
         try:
             with self._lock:
                 self.step_count += 1
@@ -137,6 +141,7 @@ class WebSocketEmitter(ChainOfThoughtEmitter):
                 
         except Exception as e:
             logger.error(f"Error emitting thought to WebSocket: {e}")
+            raise
 
     def _emit_payload(self, payload: dict):
         """Internal helper to send payload via WebSocket."""

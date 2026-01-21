@@ -137,15 +137,25 @@ async def websocket_endpoint(websocket: WebSocket):
             ctx = contextvars.copy_context()
             func = functools.partial(ctx.run, agent.agent.run, user_message, reset=False)
             response = await loop.run_in_executor(None, func)
-            await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
+            if not ws_emitter.is_closed:
+                await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
+        except RuntimeError as e:
+            if "stopped by user" in str(e).lower():
+                logger.info("Agent execution stopped by user")
+            else:
+                raise
+        except asyncio.CancelledError:
+            logger.info("Agent task cancelled")
+            raise
         except Exception as e:
             logger.error(f"Agent error: {e}")
-            await websocket.send_json({
-                "role": "assistant",
-                "content": f"I encountered an error: {str(e)}. Please try again.",
-                "id": str(uuid.uuid4()),
-                "error": True,
-            })
+            if not ws_emitter.is_closed:
+                await websocket.send_json({
+                    "role": "assistant",
+                    "content": f"I encountered an error: {str(e)}. Please try again.",
+                    "id": str(uuid.uuid4()),
+                    "error": True,
+                })
         finally:
             reset_chain_of_thought_callable(token)
             agent_task = None
@@ -161,6 +171,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Handle ping messages for keep-alive
                 if message_data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
+                    continue
+
+                # Handle stop command
+                if message_data.get("type") == "stop":
+                    logger.info("Stop command received")
+                    ws_emitter.close()
+                    if agent_task:
+                        agent_task.cancel()
+                        try:
+                            await agent_task
+                        except asyncio.CancelledError:
+                            pass
+                        agent_task = None
                     continue
 
                 # Handle confirmation response

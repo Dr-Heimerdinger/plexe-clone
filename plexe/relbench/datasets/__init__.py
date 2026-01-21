@@ -8,15 +8,10 @@ import pooch
 from ..base import Dataset
 from ..datasets import (
     amazon,
-    arxiv,
     avito,
-    dbinfer,
     event,
     f1,
     hm,
-    mimic,
-    ratebeer,
-    salt,
     stack,
     trial,
 )

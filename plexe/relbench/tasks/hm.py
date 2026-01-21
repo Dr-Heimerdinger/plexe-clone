@@ -1,8 +1,8 @@
 import duckdb
 import pandas as pd
 
-from relbench.base import Database, EntityTask, RecommendationTask, Table, TaskType
-from relbench.metrics import (
+from ..base import Database, EntityTask, RecommendationTask, Table, TaskType
+from ..metrics import (
     accuracy,
     average_precision,
     f1,

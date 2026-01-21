@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from relbench.base import Database, Dataset, Table
-from relbench.utils import decompress_gz_file
+from ..base import Database, Dataset, Table
+from ..utils import decompress_gz_file
 
 
 class EventDataset(Dataset):

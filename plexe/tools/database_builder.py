@@ -42,7 +42,7 @@ from typing import Optional
 from plexe.relbench.base import Database, Dataset, Table
 
 
-class {class_name}(Dataset):
+class GenDataset(Dataset):
     """
     Dataset for {dataset_name}.
     
@@ -348,7 +348,7 @@ def register_database_code(
         }
         object_registry.register(dict, metadata_key, metadata, overwrite=True)
         
-        logger.info(f"✅ Registered database code for '{dataset_name}' (Class: {class_name})")
+        logger.info(f"✅ Registered database code for '{dataset_name}'")
         
         return {
             "success": True,

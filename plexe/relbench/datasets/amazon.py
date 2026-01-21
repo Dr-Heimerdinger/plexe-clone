@@ -5,7 +5,7 @@ import pooch
 import pyarrow as pa
 import pyarrow.json
 
-from relbench.base import Database, Dataset, Table
+from ..base import Database, Dataset, Table
 
 
 class AmazonDataset(Dataset):

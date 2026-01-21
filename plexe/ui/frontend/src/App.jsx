@@ -168,6 +168,20 @@ export default function App() {
         setConfirmationRequest(null)
     }, [])
 
+    const stopProcessing = useCallback(() => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket not connected')
+            return
+        }
+
+        wsRef.current.send(JSON.stringify({ type: 'stop' }))
+        setIsProcessing(false)
+        setMessages((m) => [...m, {
+            role: 'assistant',
+            content: 'Stopped by user'
+        }])
+    }, [])
+
     return (
         <div className="app-root">
             <Sidebar activePage={activePage} setActivePage={setActivePage} />
@@ -179,6 +193,7 @@ export default function App() {
                         status={status}
                         isProcessing={isProcessing}
                         onSendMessage={sendMessage}
+                        onStopProcessing={stopProcessing}
                         confirmationRequest={confirmationRequest}
                         onConfirmationResponse={sendConfirmationResponse}
                     />

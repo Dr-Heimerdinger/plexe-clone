@@ -8,14 +8,10 @@ from ..base import BaseTask
 from ..datasets import get_dataset
 from ..tasks import (
     amazon,
-    arxiv,
     avito,
-    dbinfer,
     event,
     f1,
     hm,
-    mimic,
-    ratebeer,
     stack,
     trial,
 )

@@ -106,7 +106,7 @@ function ConfirmationDialog({ request, onConfirm, onReject }) {
     )
 }
 
-export default function Chat({ messages, status, isProcessing, onSendMessage, confirmationRequest, onConfirmationResponse }) {
+export default function Chat({ messages, status, isProcessing, onSendMessage, onStopProcessing, confirmationRequest, onConfirmationResponse }) {
     const [input, setInput] = useState('')
     const messagesEndRef = useRef(null)
 
@@ -163,9 +163,15 @@ export default function Chat({ messages, status, isProcessing, onSendMessage, co
                     placeholder="Type your message..."
                     disabled={isProcessing || status !== 'connected'}
                 />
-                <button onClick={send} disabled={isProcessing || status !== 'connected'}>
-                    {isProcessing ? 'Processing...' : 'Send'}
-                </button>
+                {isProcessing ? (
+                    <button onClick={onStopProcessing} className="stop-btn">
+                        ⬛ Stop
+                    </button>
+                ) : (
+                    <button onClick={send} disabled={status !== 'connected'}>
+                        Send
+                    </button>
+                )}
             </div>
         </div>
     )

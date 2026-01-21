@@ -28,7 +28,6 @@ from plexe.tools.task_builder import (
     test_sql_query,
     analyze_potential_tasks,
     validate_task_code,
-    save_task_to_file,
     register_task_code,
     export_task_code,
     get_entity_task_template,
@@ -97,11 +96,10 @@ class TaskBuilderAgent:
                 get_entity_task_template,
                 get_recommendation_task_template,
                 get_sql_query_examples,
-                # Validation and export (PREFERRED: use save_task_to_file)
+                # Validation and registration
                 validate_task_code,
-                save_task_to_file,  # Simpler: directly writes code to file
-                register_task_code,  # Legacy: 2-step process
-                export_task_code,    # Legacy: requires register first
+                register_task_code,
+                export_task_code,
             ],
             prompt_templates=get_prompt_templates(
                 base_template_name="code_agent.yaml",
@@ -120,7 +118,7 @@ class TaskBuilderAgent:
                 "pandas",
                 "pandas.*",
                 "numpy",
-                "numpy.*",
+                "numpy.*",      
                 "duckdb",
                 "duckdb.*",
                 "os",

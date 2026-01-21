@@ -372,6 +372,14 @@ body,
     opacity: 0.7;
 }
 
+.stop-btn {
+    background: var(--error) !important;
+}
+
+.stop-btn:hover {
+    background: #dc2626 !important;
+}
+
 /* ===== Dataset Page ===== */
 .dataset-container {
     flex: 1;
