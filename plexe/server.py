@@ -1,59 +1,29 @@
 """
-FastAPI server for the Plexe conversational agent.
+FastAPI server for the Plexe LangGraph-based multi-agent system.
 
-This module provides a lightweight WebSocket API for the conversational agent
-and serves the assistant-ui frontend for local execution.
+This module provides WebSocket API for real-time chat communication
+and serves the frontend for the Plexe ML platform.
 """
 
 import asyncio
-import contextvars
-import functools
 import json
 import logging
 import uuid
 from pathlib import Path
+from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from plexe.agents.conversational import ConversationalAgent
+from plexe.langgraph import PlexeOrchestrator, AgentConfig
 from plexe.api import datasets_router
-from plexe.execution_context import set_chain_of_thought_callable, reset_chain_of_thought_callable
-from plexe.internal.common.utils.chain_of_thought import (
-    ChainOfThoughtCallable,
-    MultiEmitter,
-    ConsoleEmitter,
-    WebSocketEmitter,
-)
 
 logger = logging.getLogger(__name__)
 
+app = FastAPI(title="Plexe Assistant", version="2.0.0")
 
-class WebSocketLogHandler(logging.Handler):
-    """
-    Log handler that forwards log records to a WebSocketEmitter.
-    """
-    def __init__(self, emitter: WebSocketEmitter):
-        super().__init__()
-        self.emitter = emitter
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            msg = self.format(record)
-            # Use the logger name as the agent name, or a simplified version
-            agent_name = record.name.split('.')[-1] if '.' in record.name else record.name
-            
-            # Emit as a thought
-            self.emitter.emit_thought(agent_name, msg)
-        except Exception:
-            self.handleError(record)
-
-
-app = FastAPI(title="Plexe Assistant", version="1.0.0")
-
-# Add CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -62,25 +32,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include dataset API routes
 app.include_router(datasets_router)
 
-# Serve static files from the ui directory
 ui_dir = Path(__file__).parent / "ui"
-# Prefer a built frontend in `ui/frontend/dist` if present (Vite build output).
 frontend_dist = ui_dir / "frontend" / "dist"
 if frontend_dist.exists():
-    # Serve built static assets from the frontend dist directory
     app.mount("/static", StaticFiles(directory=str(frontend_dist)), name="static")
 elif ui_dir.exists():
-    # Fallback: serve legacy ui directory (contains index.html and inline JS)
     app.mount("/static", StaticFiles(directory=str(ui_dir)), name="static")
+
+
+class SessionManager:
+    """Manages active chat sessions."""
+    
+    def __init__(self):
+        self.sessions: Dict[str, Dict[str, Any]] = {}
+    
+    def create_session(self, session_id: str) -> PlexeOrchestrator:
+        """Create a new session with its own orchestrator."""
+        config = AgentConfig.from_env()
+        orchestrator = PlexeOrchestrator(config=config, verbose=True)
+        self.sessions[session_id] = {
+            "orchestrator": orchestrator,
+            "working_dir": f"workdir/session-{session_id}",
+        }
+        return orchestrator
+    
+    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get an existing session."""
+        return self.sessions.get(session_id)
+    
+    def remove_session(self, session_id: str):
+        """Remove a session."""
+        if session_id in self.sessions:
+            del self.sessions[session_id]
+
+
+session_manager = SessionManager()
 
 
 @app.get("/")
 async def root():
     """Serve the main HTML page."""
-    # Prefer serving the built frontend if available
     built_index = frontend_dist / "index.html"
     legacy_index = ui_dir / "index.html"
 
@@ -89,7 +82,7 @@ async def root():
     if legacy_index.exists():
         return FileResponse(str(legacy_index))
     return {
-        "error": "Frontend not found. Please ensure plexe/ui/frontend/dist/index.html or plexe/ui/index.html exists."
+        "error": "Frontend not found. Please ensure plexe/ui/frontend/dist/index.html exists."
     }
 
 
@@ -100,56 +93,96 @@ async def websocket_endpoint(websocket: WebSocket):
     session_id = str(uuid.uuid4())
     logger.info(f"New WebSocket connection: {session_id}")
 
-    # Get the current event loop to pass to the emitter
     loop = asyncio.get_running_loop()
-
-    # Create emitters for chain of thought
-    ws_emitter = WebSocketEmitter(websocket, loop=loop)
-    console_emitter = ConsoleEmitter()
-    multi_emitter = MultiEmitter([ws_emitter, console_emitter])
+    orchestrator = session_manager.create_session(session_id)
+    session_data = session_manager.get_session(session_id)
+    working_dir = session_data["working_dir"]
     
-    # Create chain of thought callable with the multi emitter
-    chain_of_thought = ChainOfThoughtCallable(emitter=multi_emitter)
-
-    # Create a new agent instance for this session with chain of thought
-    # Enable verbose mode to capture detailed logs
-    agent = ConversationalAgent(chain_of_thought_callable=chain_of_thought, verbose=True)
-
-    # Create and attach log handler to capture agent logs
-    log_handler = WebSocketLogHandler(ws_emitter)
-    # Capture logs from smolagents and plexe.agents
-    loggers_to_capture = ["smolagents", "plexe.agents"]
-    for logger_name in loggers_to_capture:
-        l = logging.getLogger(logger_name)
-        l.addHandler(log_handler)
-        # Ensure level is at least INFO to capture thoughts if not already set
-        if l.level == logging.NOTSET:
-            l.setLevel(logging.INFO)
-
-    # Track if agent is currently running
     agent_task = None
+    is_closed = False
 
-    async def run_agent_task(user_message: str):
-        """Run agent in executor and handle response."""
+    async def send_message(msg_type: str, content: Any):
+        """Send a message to the client."""
+        if not is_closed:
+            try:
+                await websocket.send_json({
+                    "type": msg_type,
+                    "content": content,
+                    "id": str(uuid.uuid4()),
+                    "session_id": session_id,
+                })
+            except Exception as e:
+                logger.warning(f"Failed to send message: {e}")
+
+    async def send_thought(agent_name: str, thought: str):
+        """Send a thought/progress update to the client."""
+        await send_message("thought", {
+            "agent": agent_name,
+            "message": thought,
+        })
+
+    async def run_agent_task(user_message: str, db_connection: Optional[str] = None):
+        """Run the orchestrator in a separate thread."""
         nonlocal agent_task
-        token = set_chain_of_thought_callable(chain_of_thought)
+        
         try:
-            ctx = contextvars.copy_context()
-            func = functools.partial(ctx.run, agent.agent.run, user_message, reset=False)
-            response = await loop.run_in_executor(None, func)
-            if not ws_emitter.is_closed:
-                await websocket.send_json({"role": "assistant", "content": response, "id": str(uuid.uuid4())})
-        except RuntimeError as e:
-            if "stopped by user" in str(e).lower():
-                logger.info("Agent execution stopped by user")
+            await send_thought("system", "Processing your request...")
+            
+            def run_sync():
+                session = session_manager.get_session(session_id)
+                if not session:
+                    return {"status": "error", "error": "Session not found"}
+                
+                orch = session["orchestrator"]
+                state = orch.get_session_state(session_id)
+                
+                if state:
+                    return orch.chat(
+                        message=user_message,
+                        session_id=session_id,
+                        working_dir=working_dir,
+                    )
+                else:
+                    return orch.run(
+                        user_message=user_message,
+                        db_connection_string=db_connection,
+                        working_dir=working_dir,
+                        session_id=session_id,
+                    )
+            
+            result = await loop.run_in_executor(None, run_sync)
+            
+            response_text = ""
+            if result.get("status") == "success":
+                response_text = result.get("response", "Processing complete.")
+            elif result.get("status") == "completed":
+                state = result.get("state", {})
+                messages = state.get("messages", [])
+                for msg in reversed(messages):
+                    if msg.get("role") == "assistant":
+                        response_text = msg.get("content", "")
+                        break
+                if not response_text:
+                    response_text = "Pipeline completed successfully."
+            elif result.get("status") == "error":
+                response_text = f"Error: {result.get('error', 'Unknown error')}"
             else:
-                raise
+                response_text = result.get("response", str(result))
+            
+            if not is_closed:
+                await websocket.send_json({
+                    "role": "assistant",
+                    "content": response_text,
+                    "id": str(uuid.uuid4()),
+                    "phase": result.get("phase", result.get("state", {}).get("current_phase")),
+                })
+                
         except asyncio.CancelledError:
             logger.info("Agent task cancelled")
             raise
         except Exception as e:
             logger.error(f"Agent error: {e}")
-            if not ws_emitter.is_closed:
+            if not is_closed:
                 await websocket.send_json({
                     "role": "assistant",
                     "content": f"I encountered an error: {str(e)}. Please try again.",
@@ -157,26 +190,21 @@ async def websocket_endpoint(websocket: WebSocket):
                     "error": True,
                 })
         finally:
-            reset_chain_of_thought_callable(token)
             agent_task = None
 
     try:
         while True:
-            # Receive message from client
             data = await websocket.receive_text()
 
             try:
                 message_data = json.loads(data)
                 
-                # Handle ping messages for keep-alive
                 if message_data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
                     continue
 
-                # Handle stop command
                 if message_data.get("type") == "stop":
                     logger.info("Stop command received")
-                    ws_emitter.close()
                     if agent_task:
                         agent_task.cancel()
                         try:
@@ -186,27 +214,25 @@ async def websocket_endpoint(websocket: WebSocket):
                         agent_task = None
                     continue
 
-                # Handle confirmation response
                 if message_data.get("type") == "confirmation_response":
-                    request_id = message_data.get("id")
                     confirmed = message_data.get("confirmed", False)
-                    logger.info(f"Received confirmation response: {request_id} = {confirmed}")
-                    ws_emitter.resolve_confirmation(request_id, confirmed)
+                    logger.info(f"Received confirmation: {confirmed}")
                     continue
                 
                 user_message = message_data.get("content", "")
+                db_connection = message_data.get("db_connection_string")
+                
                 if not user_message:
                     continue
 
-                # Process the message with the agent
                 logger.debug(f"Processing message: {user_message[:100]}...")
                 
-                # Start agent task in background so we can continue receiving messages
-                # This allows confirmation responses to be processed while agent is running
                 if agent_task is None:
-                    agent_task = asyncio.create_task(run_agent_task(user_message))
+                    agent_task = asyncio.create_task(
+                        run_agent_task(user_message, db_connection)
+                    )
                 else:
-                    logger.warning("Agent is already processing a message, ignoring new message")
+                    logger.warning("Agent is already processing")
                     await websocket.send_json({
                         "role": "assistant",
                         "content": "I'm still processing your previous request. Please wait.",
@@ -214,49 +240,41 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
 
             except json.JSONDecodeError:
-                # Handle plain text messages for compatibility
                 if agent_task is None:
                     agent_task = asyncio.create_task(run_agent_task(data))
 
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
                 try:
-                    await websocket.send_json(
-                        {
-                            "role": "assistant",
-                            "content": f"I encountered an error: {str(e)}. Please try again.",
-                            "id": str(uuid.uuid4()),
-                            "error": True,
-                        }
-                    )
-                except Exception as send_error:
-                    logger.warning(f"Could not send error message to client: {send_error}")
+                    await websocket.send_json({
+                        "role": "assistant",
+                        "content": f"I encountered an error: {str(e)}. Please try again.",
+                        "id": str(uuid.uuid4()),
+                        "error": True,
+                    })
+                except Exception:
+                    pass
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {session_id}")
-        # Mark emitter as closed to stop sending messages
-        ws_emitter.close()
+        is_closed = True
         if agent_task:
             agent_task.cancel()
     except Exception as e:
         logger.error(f"WebSocket error for session {session_id}: {e}")
-        # Mark emitter as closed to stop sending messages
-        ws_emitter.close()
+        is_closed = True
         if agent_task:
             agent_task.cancel()
         try:
             await websocket.close()
         except Exception:
-            pass # Connection might be already closed
+            pass
     finally:
-        # Ensure emitter is closed
-        ws_emitter.close()
-        # Remove log handler
-        for logger_name in loggers_to_capture:
-            logging.getLogger(logger_name).removeHandler(log_handler)
+        is_closed = True
+        session_manager.remove_session(session_id)
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "plexe-assistant"}
+    return {"status": "healthy", "service": "plexe-assistant", "version": "2.0.0"}

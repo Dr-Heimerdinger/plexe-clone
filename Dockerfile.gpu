@@ -44,7 +44,7 @@ RUN uv pip install \
         litellm statsmodels hypothesis "numpy<2.0.0" black jinja2 platformdirs \
         "ray>=2.9.0" rich smolagents deprecated python-multipart psycopg2-binary \
         featuretools sqlalchemy pytorch-frame pooch duckdb scipy \
-        fastapi "uvicorn[standard]" websockets
+        fastapi "uvicorn[standard]" websockets langgraph langchain langchain-openai langchain-google-genai angchain-anthropic
  
 # ----------------------------
 # BƯỚC 3: Cài torchvision, torchaudio (torch đã có sẵn từ base image)
@@ -83,19 +83,18 @@ COPY . .
 # ----------------------------
 RUN python - <<EOF
 import torch
-print("✓ Python OK")
-print("✓ Torch:", torch.__version__)
-print("  Note: CUDA will be available at runtime, not during build")
+print("Torch:", torch.__version__)
+print("Note: CUDA will be available at runtime, not during build")
 import torch_geometric
-print("✓ PyG OK")
+print("PyG OK")
 import sentence_transformers
-print("✓ sentence-transformers:", sentence_transformers.__version__)
+print("sentence-transformers:", sentence_transformers.__version__)
 import mlflow
-print("✓ MLflow:", mlflow.__version__)
-import deprecated
-print("✓ deprecated OK")
-from plexe import Model
-print("✓ plexe import OK")
+print("MLflow:", mlflow.__version__)
+from plexe import Model, PlexeOrchestrator
+print("plexe import OK")
+from plexe.langgraph import EDAAgent, ConversationalAgent
+print("LangGraph agents OK")
 EOF
  
 CMD ["python", "-m", "uvicorn", "plexe.server:app", "--host", "0.0.0.0", "--port", "8100", "--reload", "--reload-dir", "plexe"]
