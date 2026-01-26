@@ -19,143 +19,9 @@ from plexe.langgraph.tools.dataset_builder import (
     get_temporal_statistics,
     register_dataset_code,
 )
+from plexe.langgraph.prompts.dataset_builder import DATASET_BUILDER_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
-
-
-DATASET_BUILDER_SYSTEM_PROMPT = """You are the Dataset Builder Agent, an expert in building RelBench Database objects from raw CSV data.
-
-## Your Mission
-Generate a complete Python Dataset class (GenDataset) that:
-1. Loads CSV files from a specified directory
-2. Processes and cleans the data appropriately
-3. Defines the database schema (PKs, FKs, time columns)
-4. Provides proper temporal splitting (val_timestamp, test_timestamp)
-
-## Workflow
-
-### Step 1: Discover CSV Files
-Use get_csv_files_info to list available CSV files and their columns.
-
-### Step 2: Analyze Temporal Data
-Use get_temporal_statistics to:
-- Find timestamp columns in each table
-- Get suggested val_timestamp and test_timestamp values
-- Understand the temporal distribution of data
-
-### Step 3: Generate Dataset Code
-Create a complete GenDataset class following this structure:
-
-```python
-import os
-import numpy as np
-import pandas as pd
-from typing import Optional
-from plexe.relbench.base import Database, Dataset, Table
-
-class GenDataset(Dataset):
-    val_timestamp = pd.Timestamp("YYYY-MM-DD")
-    test_timestamp = pd.Timestamp("YYYY-MM-DD")
-
-    def __init__(self, csv_dir: str, cache_dir: Optional[str] = None):
-        self.csv_dir = csv_dir
-        super().__init__(cache_dir=cache_dir)
-
-    def make_db(self) -> Database:
-        path = self.csv_dir
-        
-        # 1. Load CSV files
-        # table_name = pd.read_csv(os.path.join(path, "table_name.csv"))
-        
-        # 2. Data cleaning (drop irrelevant columns, handle nulls)
-        
-        # 3. Time processing (parse timestamps, propagate from parent to child)
-        
-        # 4. Build and return Database
-        db = Database(
-            table_dict={
-                "table_name": Table(
-                    df=table_df,
-                    fkey_col_to_pkey_table={"fk_col": "referenced_table"},
-                    pkey_col="primary_key_col",
-                    time_col="timestamp_col",  # or None for static tables
-                ),
-                # ... more tables
-            }
-        )
-        return db
-```
-
-### Step 4: Register the Code
-Use register_dataset_code to save the generated code.
-
-## Critical Concepts
-
-### Temporal Splitting
-- val_timestamp: Rows up to this time for validation
-- test_timestamp: Rows up to this time for test
-- Choose based on data distribution (~70% for val, ~85% for test)
-
-### Table Definition
-- pkey_col: Primary key (can be None for junction tables)
-- fkey_col_to_pkey_table: Dict mapping FK columns to referenced tables
-- time_col: Creation/event time (None for static dimension tables)
-
-### Data Cleaning Guidelines
-- Drop columns with >50% nulls
-- Drop URL/image columns (not useful for GNN)
-- Handle database NULL markers (\\N -> NaN)
-- Convert timestamps properly
-- Propagate timestamps from parent to child tables when needed
-
-## Important
-- Always use class name 'GenDataset'
-- Use exact column names from CSV files (typically snake_case)
-- Get val/test timestamps from get_temporal_statistics
-- Register the code using register_dataset_code tool
-"""
-
-
-DATASET_CODE_TEMPLATE = '''"""
-Auto-generated Dataset class for RelBench.
-"""
-
-import os
-import numpy as np
-import pandas as pd
-from typing import Optional
-
-from plexe.relbench.base import Database, Dataset, Table
-
-
-class GenDataset(Dataset):
-    """Generated Dataset class for the relational database."""
-    
-    val_timestamp = pd.Timestamp("{val_timestamp}")
-    test_timestamp = pd.Timestamp("{test_timestamp}")
-
-    def __init__(self, csv_dir: str, cache_dir: Optional[str] = None):
-        self.csv_dir = csv_dir
-        super().__init__(cache_dir=cache_dir)
-
-    def make_db(self) -> Database:
-        path = self.csv_dir
-        
-{load_code}
-
-{cleaning_code}
-
-{time_processing_code}
-
-        db = Database(
-            table_dict={{
-{table_dict_code}
-            }}
-        )
-        
-        return db
-'''
-
 
 class DatasetBuilderAgent(BaseAgent):
     """Agent for building RelBench Dataset classes from CSV data."""
@@ -165,13 +31,6 @@ class DatasetBuilderAgent(BaseAgent):
         config: Optional[AgentConfig] = None,
         additional_tools: Optional[List[BaseTool]] = None,
     ):
-        """
-        Initialize the dataset builder agent.
-        
-        Args:
-            config: Agent configuration
-            additional_tools: Additional tools beyond defaults
-        """
         tools = [
             get_csv_files_info,
             get_temporal_statistics,
@@ -200,23 +59,23 @@ class DatasetBuilderAgent(BaseAgent):
             context_parts.append(f"Working directory: {state['working_dir']}")
         
         if state.get("csv_dir"):
-            context_parts.append(f"CSV files directory: {state['csv_dir']}")
+            context_parts.append(f"CSV directory: {state['csv_dir']}")
         
         if state.get("schema_info"):
             schema = state["schema_info"]
             tables = list(schema.get("tables", {}).keys())
-            context_parts.append(f"Tables from schema: {', '.join(tables)}")
+            context_parts.append(f"Tables: {', '.join(tables)}")
             
             if schema.get("relationships"):
-                rels = [f"{r['source_table']}.{r['source_column']} -> {r['target_table']}" 
-                        for r in schema["relationships"]]
-                context_parts.append(f"Relationships: {'; '.join(rels)}")
+                rels = []
+                for r in schema["relationships"]:
+                    rels.append(f"{r['source_table']}.{r['source_column']} -> {r['target_table']}")
+                context_parts.append(f"Foreign keys: {'; '.join(rels)}")
             
             if schema.get("temporal_columns"):
-                temporal = [f"{t}: {cols}" for t, cols in schema["temporal_columns"].items()]
-                context_parts.append(f"Temporal columns: {'; '.join(temporal)}")
+                for table, cols in schema["temporal_columns"].items():
+                    context_parts.append(f"{table} time columns: {cols}")
         
-        # Include EDA information from previous phase
         if state.get("eda_info"):
             eda = state["eda_info"]
             context_parts.append("\n## EDA Analysis Results:")
@@ -246,50 +105,41 @@ class DatasetBuilderAgent(BaseAgent):
                     if isinstance(info, dict) and info.get("cardinality"):
                         context_parts.append(f"  - {key}: {info['cardinality']}")
         
-        task_instruction = """
-Your task:
-1. Analyze the CSV files using get_csv_files_info
-2. Get temporal statistics using get_temporal_statistics (use EDA suggestions if available)
-3. Generate a complete GenDataset class with proper:
-   - Table loading
-   - Data cleaning (address quality issues found in EDA)
-   - Temporal processing
-   - Schema definition (PKs, FKs, time_cols)
-4. Register the code using register_dataset_code
+        working_dir = state.get('working_dir', '')
+        csv_dir = state.get('csv_dir', '')
+        
+        task_instruction = f"""
+YOUR TASK:
+1. Call get_csv_files_info("{csv_dir}") to list all CSV files and columns
+2. Call get_temporal_statistics("{csv_dir}") to analyze timestamps
+3. Generate a complete GenDataset class following the template above
+4. Call register_dataset_code(code, "GenDataset", "{working_dir}/dataset.py") to save it
 
-The output file should be saved as 'dataset.py' in the working directory.
+IMPORTANT: You MUST call register_dataset_code to save the dataset.py file!
 """
         context_parts.append(task_instruction)
         
         return "\n".join(context_parts)
     
     def _process_result(self, result: Dict[str, Any], state: PipelineState) -> Dict[str, Any]:
-        """Process result and extract dataset information from tool calls."""
+        """Process result and extract dataset information."""
         base_result = super()._process_result(result, state)
         
         dataset_info = {}
-        generated_code = state.get("generated_code", {})
+        working_dir = state.get("working_dir", "")
         
-        if "tool_calls" in result and result["tool_calls"]:
-            for tool_call in result["tool_calls"]:
-                tool_name = tool_call.get("name", "")
-                tool_result = tool_call.get("result", {})
-                
-                if tool_name == "register_dataset_code" and tool_result.get("status") == "registered":
-                    dataset_info["class_name"] = tool_result.get("class_name", "GenDataset")
-                    dataset_info["file_path"] = tool_result.get("file_path")
-                    if "code" in tool_result:
-                        generated_code["dataset"] = tool_result["code"]
-        
-        if not dataset_info:
+        # Check if dataset.py was created
+        dataset_path = os.path.join(working_dir, "dataset.py")
+        if os.path.exists(dataset_path):
             dataset_info["class_name"] = "GenDataset"
+            dataset_info["file_path"] = dataset_path
+            logger.info(f"Dataset file created at: {dataset_path}")
+        else:
+            logger.warning(f"Dataset file not found at: {dataset_path}")
+            dataset_info["class_name"] = "GenDataset"
+            dataset_info["file_path"] = dataset_path
         
-        if dataset_info:
-            base_result["dataset_info"] = dataset_info
-        
-        if generated_code:
-            base_result["generated_code"] = generated_code
-        
+        base_result["dataset_info"] = dataset_info
         base_result["current_phase"] = PipelinePhase.TASK_BUILDING.value
         
         return base_result

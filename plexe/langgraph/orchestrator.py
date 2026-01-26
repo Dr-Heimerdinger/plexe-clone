@@ -19,6 +19,7 @@ from plexe.langgraph.state import (
     create_initial_state,
 )
 from plexe.langgraph.config import AgentConfig
+from plexe.langgraph.utils import BaseEmitter, ConsoleEmitter, ChainOfThoughtCallback
 from plexe.langgraph.agents import (
     ConversationalAgent,
     EDAAgent,
@@ -37,7 +38,7 @@ class PlexeOrchestrator:
     
     This orchestrator manages the workflow between specialized agents:
     1. ConversationalAgent - User interaction and requirements gathering
-    2. RelationalGraphArchitectAgent - Schema analysis and data export
+    2. EDAAgent - Schema analysis, data export, and exploratory data analysis
     3. DatasetBuilderAgent - Dataset class generation
     4. TaskBuilderAgent - Task class and SQL generation
     5. RelationalGNNSpecialistAgent - GNN training
@@ -49,6 +50,7 @@ class PlexeOrchestrator:
         config: Optional[AgentConfig] = None,
         verbose: bool = False,
         callback: Optional[Callable] = None,
+        emitter: Optional[BaseEmitter] = None,
     ):
         """
         Initialize the orchestrator.
@@ -57,13 +59,28 @@ class PlexeOrchestrator:
             config: Agent configuration (uses defaults if None)
             verbose: Enable verbose logging
             callback: Optional callback for progress updates
+            emitter: Optional emitter for UI communication
         """
         self.config = config or AgentConfig.from_env()
         self.verbose = verbose
         self.callback = callback
+        self.emitter = emitter or ConsoleEmitter()
         
         self._init_agents()
         self._build_graph()
+    
+    def set_emitter(self, emitter: BaseEmitter):
+        """Set the emitter for all agents."""
+        self.emitter = emitter
+        for agent in [
+            self.conversational_agent,
+            self.eda_agent,
+            self.dataset_builder_agent,
+            self.task_builder_agent,
+            self.gnn_specialist_agent,
+            self.operation_agent,
+        ]:
+            agent.set_emitter(emitter)
     
     def _init_agents(self):
         """Initialize all agents."""
@@ -73,6 +90,16 @@ class PlexeOrchestrator:
         self.task_builder_agent = TaskBuilderAgent(config=self.config)
         self.gnn_specialist_agent = RelationalGNNSpecialistAgent(config=self.config)
         self.operation_agent = OperationAgent(config=self.config)
+        
+        for agent in [
+            self.conversational_agent,
+            self.eda_agent,
+            self.dataset_builder_agent,
+            self.task_builder_agent,
+            self.gnn_specialist_agent,
+            self.operation_agent,
+        ]:
+            agent.set_emitter(self.emitter)
     
     def _build_graph(self):
         """Build the LangGraph workflow."""
@@ -150,37 +177,37 @@ class PlexeOrchestrator:
     
     def _conversation_node(self, state: PipelineState) -> Dict[str, Any]:
         """Handle conversation with user."""
-        self._log_phase("Conversation")
+        self._log_phase("Conversation", "ConversationalAgent")
         result = self.conversational_agent.invoke(state)
         return result
     
     def _schema_analysis_node(self, state: PipelineState) -> Dict[str, Any]:
         """Handle schema analysis, data export, and EDA."""
-        self._log_phase("Schema Analysis & EDA")
+        self._log_phase("Schema Analysis & EDA", "EDAAgent")
         result = self.eda_agent.invoke(state)
         return result
     
     def _dataset_building_node(self, state: PipelineState) -> Dict[str, Any]:
         """Handle dataset class generation."""
-        self._log_phase("Dataset Building")
+        self._log_phase("Dataset Building", "DatasetBuilderAgent")
         result = self.dataset_builder_agent.invoke(state)
         return result
     
     def _task_building_node(self, state: PipelineState) -> Dict[str, Any]:
         """Handle task class generation."""
-        self._log_phase("Task Building")
+        self._log_phase("Task Building", "TaskBuilderAgent")
         result = self.task_builder_agent.invoke(state)
         return result
     
     def _gnn_training_node(self, state: PipelineState) -> Dict[str, Any]:
         """Handle GNN training."""
-        self._log_phase("GNN Training")
+        self._log_phase("GNN Training", "RelationalGNNSpecialistAgent")
         result = self.gnn_specialist_agent.invoke(state)
         return result
     
     def _operation_node(self, state: PipelineState) -> Dict[str, Any]:
         """Handle operation and finalization."""
-        self._log_phase("Operation")
+        self._log_phase("Operation", "OperationAgent")
         result = self.operation_agent.invoke(state)
         result["current_phase"] = PipelinePhase.COMPLETED.value
         return result
@@ -189,6 +216,9 @@ class PlexeOrchestrator:
         """Handle errors and determine recovery strategy."""
         errors = state.get("errors", [])
         logger.error(f"Pipeline error: {errors}")
+        
+        if self.emitter:
+            self.emitter.emit_thought("ErrorHandler", f"Handling errors: {errors}")
         
         retry_count = state.get("metadata", {}).get("retry_count", 0)
         max_retries = self.config.max_retries
@@ -205,14 +235,39 @@ class PlexeOrchestrator:
     
     def _route_from_conversation(self, state: PipelineState) -> Literal["continue", "proceed", "end"]:
         """Route from conversation node."""
+        logger.debug(f"Routing from conversation: user_confirmation_required={state.get('user_confirmation_required')}, "
+                    f"user_confirmed={state.get('user_confirmed')}, user_intent={state.get('user_intent')}, "
+                    f"db_connection_string={bool(state.get('db_connection_string'))}")
+        
         if state.get("user_confirmation_required"):
             if state.get("user_confirmed"):
+                logger.info("User confirmed, proceeding to schema analysis")
                 return "proceed"
             return "continue"
         
         if state.get("db_connection_string") or state.get("csv_dir"):
             if state.get("user_intent"):
+                logger.info("Intent detected with data source, proceeding to schema analysis")
                 return "proceed"
+        
+        messages = state.get("messages", [])
+        for msg in reversed(messages):
+            if msg.get("role") == "assistant":
+                content = msg.get("content", "").lower()
+                ready_indicators = [
+                    "ready to proceed",
+                    "start building",
+                    "begin training",
+                    "let's begin",
+                    "i'll start",
+                    "proceed with",
+                    "starting the pipeline",
+                ]
+                if any(indicator in content for indicator in ready_indicators):
+                    if state.get("db_connection_string") or state.get("csv_dir"):
+                        logger.info("Ready indicator found in response, proceeding")
+                        return "proceed"
+                break
         
         return "continue"
     
@@ -222,6 +277,8 @@ class PlexeOrchestrator:
             return "error"
         if state.get("csv_dir") and state.get("schema_info"):
             return "success"
+        if state.get("csv_dir"):
+            return "success"
         return "error"
     
     def _route_from_dataset(self, state: PipelineState) -> Literal["success", "error"]:
@@ -229,6 +286,9 @@ class PlexeOrchestrator:
         if state.get("errors"):
             return "error"
         if state.get("dataset_info"):
+            return "success"
+        working_dir = state.get("working_dir", "")
+        if os.path.exists(os.path.join(working_dir, "dataset.py")):
             return "success"
         return "error"
     
@@ -238,6 +298,9 @@ class PlexeOrchestrator:
             return "error"
         if state.get("task_info"):
             return "success"
+        working_dir = state.get("working_dir", "")
+        if os.path.exists(os.path.join(working_dir, "task.py")):
+            return "success"
         return "error"
     
     def _route_from_training(self, state: PipelineState) -> Literal["success", "error"]:
@@ -245,6 +308,9 @@ class PlexeOrchestrator:
         if state.get("errors"):
             return "error"
         if state.get("training_result"):
+            return "success"
+        working_dir = state.get("working_dir", "")
+        if os.path.exists(os.path.join(working_dir, "training_results.json")):
             return "success"
         return "error"
     
@@ -255,12 +321,18 @@ class PlexeOrchestrator:
             return "retry"
         return "end"
     
-    def _log_phase(self, phase: str):
-        """Log phase transition."""
+    def _log_phase(self, phase: str, agent_name: str = ""):
+        """Log phase transition with rich formatting."""
         if self.verbose:
-            logger.info(f"=== Phase: {phase} ===")
+            logger.info(f"=== Phase: {phase} ({agent_name}) ===")
         if self.callback:
-            self.callback({"phase": phase, "timestamp": datetime.now().isoformat()})
+            self.callback({
+                "phase": phase,
+                "agent": agent_name,
+                "timestamp": datetime.now().strftime("%H:%M:%S")
+            })
+        if self.emitter:
+            self.emitter.emit_thought("Orchestrator", f"Pipeline Phase: {phase} - Activating {agent_name}")
     
     def run(
         self,

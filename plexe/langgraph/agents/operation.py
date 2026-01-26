@@ -15,63 +15,9 @@ from plexe.langgraph.config import AgentConfig
 from plexe.langgraph.state import PipelineState, PipelinePhase
 from plexe.langgraph.tools.common import save_artifact
 from plexe.langgraph.tools.gnn_specialist import execute_training_script
+from plexe.langgraph.prompts.operation import OPERATION_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
-
-
-OPERATION_SYSTEM_PROMPT = """You are the Operation Agent, responsible for environment setup, execution monitoring, and model packaging.
-
-## Your Mission
-1. Ensure the execution environment is properly configured
-2. Monitor training execution and handle errors
-3. Package the trained model for deployment
-4. Generate inference code and documentation
-
-## Responsibilities
-
-### Environment Setup
-- Verify required packages are installed
-- Check GPU availability
-- Ensure file paths are accessible
-- Validate prerequisites
-
-### Execution Monitoring
-- Monitor training progress
-- Capture and report errors
-- Handle timeouts appropriately
-- Log resource usage
-
-### Model Packaging
-- Save trained model artifacts
-- Generate inference code
-- Create model documentation
-- Prepare deployment package
-
-### Error Handling
-- Identify common failure patterns
-- Suggest fixes for errors
-- Retry with adjusted parameters
-- Escalate unfixable issues
-
-## Available Actions
-- Check environment requirements
-- Execute training scripts with monitoring
-- Save artifacts and logs
-- Generate inference code
-
-## Output Requirements
-After successful execution, provide:
-1. Final model metrics
-2. Model artifact locations
-3. Any warnings or issues encountered
-4. Recommendations for deployment
-
-## Important
-- Always verify environment before execution
-- Monitor for common PyTorch/GPU errors
-- Save all artifacts to the working directory
-- Provide clear error messages for failures
-"""
 
 
 class OperationAgent(BaseAgent):
@@ -82,13 +28,6 @@ class OperationAgent(BaseAgent):
         config: Optional[AgentConfig] = None,
         additional_tools: Optional[List[BaseTool]] = None,
     ):
-        """
-        Initialize the operation agent.
-        
-        Args:
-            config: Agent configuration
-            additional_tools: Additional tools beyond defaults
-        """
         tools = [
             execute_training_script,
             save_artifact,
@@ -111,23 +50,53 @@ class OperationAgent(BaseAgent):
         """Build context with operation-specific information."""
         context_parts = []
         
-        if state.get("working_dir"):
-            context_parts.append(f"Working directory: {state['working_dir']}")
+        working_dir = state.get("working_dir", "")
+        context_parts.append(f"Working directory: {working_dir}")
         
+        # Check if training script is ready
+        training_script_ready = state.get("training_script_ready", False)
+        training_script_path = state.get("training_script_path", f"{working_dir}/train_script.py")
+        
+        if training_script_ready:
+            context_parts.append(f"Training script ready: {training_script_path}")
+        
+        # Check if training has been executed
         if state.get("training_result"):
             result = state["training_result"]
-            context_parts.append(f"Training metrics: {result.get('metrics')}")
-            context_parts.append(f"Model path: {result.get('model_path')}")
+            context_parts.append(f"Training already completed:")
+            context_parts.append(f"  - Metrics: {result.get('metrics')}")
+            context_parts.append(f"  - Model path: {result.get('model_path')}")
+        
+        # Check for hyperparameters from GNN Specialist
+        if state.get("selected_hyperparameters"):
+            hp = state["selected_hyperparameters"]
+            context_parts.append(f"Selected hyperparameters: {hp}")
         
         if state.get("errors"):
             context_parts.append(f"Previous errors: {state['errors']}")
         
-        context_parts.append("""
-Your task:
-1. Review the training results
-2. Package the model and artifacts
-3. Generate a summary report
-4. Provide deployment recommendations
+        # Instructions based on state
+        if not state.get("training_result"):
+            context_parts.append(f"""
+EXECUTE TRAINING:
+1. execute_training_script(
+    script_path="{training_script_path}",
+    timeout=3600  # 1 hour timeout
+)
+2. Process the training results from {working_dir}/training_results.json
+3. Report metrics and model location
+""")
+        else:
+            context_parts.append(f"""
+FINALIZE PIPELINE:
+1. Review training results
+2. List all generated artifacts:
+   - {working_dir}/dataset.py - Dataset class
+   - {working_dir}/task.py - Task class  
+   - {working_dir}/train_script.py - Training script
+   - {working_dir}/best_model.pt - Trained model
+   - {working_dir}/training_results.json - Training metrics
+3. Provide summary and deployment recommendations
 """)
         
         return "\n".join(context_parts)
@@ -136,6 +105,29 @@ Your task:
         """Process result and finalize the pipeline."""
         base_result = super()._process_result(result, state)
         
+        import os
+        import json
+        
+        working_dir = state.get("working_dir", ".")
+        results_path = os.path.join(working_dir, "training_results.json")
+        
+        # Check if training was executed and results are available
+        if os.path.exists(results_path):
+            try:
+                with open(results_path) as f:
+                    training_results = json.load(f)
+                
+                base_result["training_result"] = {
+                    "metrics": training_results,
+                    "model_path": training_results.get("model_path"),
+                    "script_path": os.path.join(working_dir, "train_script.py"),
+                }
+                logger.info(f"Training results processed: {training_results}")
+            except Exception as e:
+                logger.warning(f"Could not read training results: {e}")
+                base_result["errors"] = base_result.get("errors", []) + [f"Failed to read training results: {e}"]
+        
+        # Mark pipeline as completed
         base_result["current_phase"] = PipelinePhase.COMPLETED.value
         
         return base_result

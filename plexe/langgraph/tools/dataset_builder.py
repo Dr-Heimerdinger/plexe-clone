@@ -1,10 +1,5 @@
-"""
-Tools for the Dataset Builder Agent.
-"""
-
 from typing import Dict, Any
 from langchain_core.tools import tool as langchain_tool
-
 
 @langchain_tool
 def get_csv_files_info(csv_dir: str) -> Dict[str, Any]:
@@ -69,7 +64,7 @@ def get_temporal_statistics(csv_dir: str) -> Dict[str, Any]:
             
             for col in df.columns:
                 try:
-                    parsed = pd.to_datetime(df[col], errors='coerce')
+                    parsed = pd.to_datetime(df[col], errors='coerce', format='mixed')
                     valid_count = parsed.notna().sum()
                     if valid_count > len(df) * 0.5:
                         min_ts = parsed.min()

@@ -1,10 +1,5 @@
-"""
-Tools for the GNN Specialist Agent.
-"""
-
 from typing import Dict, Any
 from langchain_core.tools import tool as langchain_tool
-
 
 @langchain_tool
 def generate_training_script(

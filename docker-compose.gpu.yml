@@ -77,6 +77,24 @@ services:
       MLFLOW_HTTP_REQUEST_TIMEOUT: 300
       HF_TOKEN: ${HF_TOKEN}
       HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY}
+      # API Keys for LLM providers
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-${GEMINI_API_KEY}}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Plexe Agent Model Configuration
+      PLEXE_ORCHESTRATOR_MODEL: ${PLEXE_ORCHESTRATOR_MODEL:-gemini/gemini-2.0-flash-exp}
+      PLEXE_CONVERSATIONAL_MODEL: ${PLEXE_CONVERSATIONAL_MODEL:-gemini/gemini-2.0-flash-exp}
+      PLEXE_EDA_MODEL: ${PLEXE_EDA_MODEL:-gemini/gemini-2.0-flash-exp}
+      PLEXE_DATASET_BUILDER_MODEL: ${PLEXE_DATASET_BUILDER_MODEL:-gemini/gemini-2.0-flash-exp}
+      PLEXE_TASK_BUILDER_MODEL: ${PLEXE_TASK_BUILDER_MODEL:-gemini/gemini-2.0-flash-exp}
+      PLEXE_GNN_SPECIALIST_MODEL: ${PLEXE_GNN_SPECIALIST_MODEL:-gemini/gemini-2.0-flash-exp}
+      PLEXE_OPERATION_MODEL: ${PLEXE_OPERATION_MODEL:-gemini/gemini-2.0-flash-exp}
+      PLEXE_AGENT_TEMPERATURE: ${PLEXE_AGENT_TEMPERATURE:-0.1}
+      PLEXE_VERBOSE: ${PLEXE_VERBOSE:-true}
+      # Kaggle Credentials for MCP
+      KAGGLE_USERNAME: ${KAGGLE_USERNAME}
+      KAGGLE_KEY: ${KAGGLE_KEY}
+      MCP_CONFIG_PATH: /app/mcp_config.json
     volumes:
       - .:/app
     ports:

@@ -11,6 +11,41 @@ from typing import Optional
 
 
 @dataclass
+class ExternalAPIConfig:
+    """Configuration for external API services."""
+    
+    # Semantic Scholar API
+    semantic_scholar_api_key: Optional[str] = field(default_factory=lambda: os.environ.get(
+        "SEMANTIC_SCHOLAR_API_KEY"
+    ))
+    
+    # arXiv API (no key needed, but rate limits apply)
+    arxiv_base_url: str = "http://export.arxiv.org/api/query"
+    
+    # Papers With Code API
+    papers_with_code_api_url: str = "https://paperswithcode.com/api/v1"
+    
+    # Hugging Face API (for datasets and models)
+    huggingface_token: Optional[str] = field(default_factory=lambda: os.environ.get(
+        "HF_TOKEN"
+    ))
+    
+    # OpenML API
+    openml_api_key: Optional[str] = field(default_factory=lambda: os.environ.get(
+        "OPENML_API_KEY"
+    ))
+    
+    # Rate limiting
+    max_requests_per_minute: int = 10
+    request_timeout: int = 30
+    
+    @classmethod
+    def from_env(cls) -> "ExternalAPIConfig":
+        """Create configuration from environment variables."""
+        return cls()
+
+
+@dataclass
 class AgentConfig:
     """Configuration for agent models from environment variables."""
     

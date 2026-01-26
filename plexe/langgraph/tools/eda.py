@@ -1,10 +1,5 @@
-"""
-Tools for the EDA (Exploratory Data Analysis) Agent.
-"""
-
 from typing import Dict, Any
 from langchain_core.tools import tool as langchain_tool
-
 
 @langchain_tool
 def analyze_csv_statistics(csv_dir: str) -> Dict[str, Any]:
@@ -205,7 +200,8 @@ def analyze_temporal_patterns(csv_dir: str) -> Dict[str, Any]:
             
             for col in df.columns:
                 try:
-                    parsed = pd.to_datetime(df[col], errors='coerce')
+                    # Specify format to avoid parsing warnings
+                    parsed = pd.to_datetime(df[col], errors='coerce', format='mixed')
                     valid_count = parsed.notna().sum()
                     
                     if valid_count > len(df) * 0.5:

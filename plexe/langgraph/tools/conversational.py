@@ -1,10 +1,5 @@
-"""
-Tools for the Conversational Agent.
-"""
-
 from typing import Dict, Any
 from langchain_core.tools import tool as langchain_tool
-
 
 @langchain_tool
 def get_dataset_preview(

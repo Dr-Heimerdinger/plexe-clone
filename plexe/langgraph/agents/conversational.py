@@ -10,53 +10,14 @@ from typing import Optional, List, Dict, Any
 
 from langchain_core.tools import BaseTool
 
-from plexe.langgraph.agents.base import BaseAgent
+from plexe.langgraph.agents.base import BaseAgent, extract_text_content
 from plexe.langgraph.config import AgentConfig
 from plexe.langgraph.state import PipelineState, PipelinePhase
 from plexe.langgraph.tools.conversational import get_dataset_preview
 from plexe.langgraph.tools.graph_architect import validate_db_connection
+from plexe.langgraph.prompts.conversational import CONVERSATIONAL_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
-
-
-CONVERSATIONAL_SYSTEM_PROMPT = """You are an expert ML and Deep Learning consultant helping users define their machine learning requirements through natural conversation.
-
-## Your Role
-- Guide users through defining their ML problem clearly
-- Understand their data and prediction goals
-- Validate data availability and quality
-- Initiate the ML pipeline when requirements are complete
-
-## Conversation Strategy
-1. Ask ONE focused question at a time
-2. Use tools to examine their data before asking detailed questions
-3. Help refine vague statements into precise ML problem definitions
-4. Summarize requirements and confirm before proceeding
-
-## Requirements Checklist (gather ALL before proceeding)
-1. **Clear Problem Statement**: What exactly to predict/classify
-2. **Input/Output Definition**: Model inputs and expected outputs
-3. **Data Understanding**: Examined their data structure
-4. **Data Source**: CSV files or database connection
-5. **User Confirmation**: Explicit confirmation to start building
-
-## When Working with Databases
-1. Use validate_db_connection to see available tables
-2. Discuss what they want to predict
-3. Clarify the target variable and entity
-4. Gather all requirements before signaling readiness
-
-## Response Format
-Keep responses conversational, friendly, and focused. Ask clarifying questions when needed.
-When all requirements are gathered, summarize them and ask for final confirmation.
-
-## Important
-- Do NOT rush to build models
-- Ensure clarity on the prediction task
-- Validate data accessibility
-- Get explicit user confirmation before proceeding
-"""
-
 
 class ConversationalAgent(BaseAgent):
     """Agent for conversational requirements gathering and user interaction."""
@@ -66,13 +27,6 @@ class ConversationalAgent(BaseAgent):
         config: Optional[AgentConfig] = None,
         additional_tools: Optional[List[BaseTool]] = None,
     ):
-        """
-        Initialize the conversational agent.
-        
-        Args:
-            config: Agent configuration
-            additional_tools: Additional tools beyond defaults
-        """
         tools = [
             get_dataset_preview,
             validate_db_connection,
@@ -99,7 +53,9 @@ class ConversationalAgent(BaseAgent):
         last_message = messages[-1] if messages else None
         
         if last_message:
-            content = last_message.content.lower() if hasattr(last_message, 'content') else ""
+            raw_content = last_message.content if hasattr(last_message, 'content') else ""
+            content = extract_text_content(raw_content).lower()
+            logger.info(f"ConversationalAgent response: {content[:200]}...")
             
             ready_indicators = [
                 "ready to proceed",
@@ -107,37 +63,50 @@ class ConversationalAgent(BaseAgent):
                 "begin training",
                 "initiate pipeline",
                 "all requirements gathered",
+                "let's begin",
+                "let me start",
+                "i'll start",
+                "proceed with",
+                "starting the pipeline",
+                "begin the process",
             ]
             
             if any(indicator in content for indicator in ready_indicators):
+                logger.info("Detected ready indicator, setting user_confirmation_required")
                 base_result["user_confirmation_required"] = True
+                base_result["user_confirmed"] = True
+                base_result["user_intent"] = self._extract_intent_from_state(state)
                 base_result["user_confirmation_context"] = {
                     "type": "proceed_to_pipeline",
-                    "message": "Ready to start the ML pipeline?"
+                    "message": "Ready to start the ML pipeline"
                 }
+        
+        has_db = state.get("db_connection_string")
+        has_task = any("predict" in msg.get("content", "").lower() for msg in state.get("messages", []))
+        if has_db and has_task and not base_result.get("user_intent"):
+            logger.info("Auto-detecting intent from state")
+            base_result["user_intent"] = self._extract_intent_from_state(state)
         
         return base_result
     
-    def extract_intent(self, state: PipelineState) -> Dict[str, Any]:
-        """
-        Extract structured intent from conversation.
-        
-        Returns:
-            Dictionary with extracted intent information
-        """
-        messages = state.get("messages", [])
-        
+    def _extract_intent_from_state(self, state: PipelineState) -> Dict[str, Any]:
+        """Extract intent from state."""
         intent = {
             "prediction_target": None,
             "entity_type": None,
-            "task_type": None,
-            "data_source": None,
-            "confirmed": False,
+            "task_type": "binary_classification",
+            "data_source": "database" if state.get("db_connection_string") else "csv",
+            "confirmed": True,
         }
         
-        if state.get("db_connection_string"):
-            intent["data_source"] = "database"
-        elif state.get("csv_dir"):
-            intent["data_source"] = "csv"
+        for msg in state.get("messages", []):
+            content = msg.get("content", "").lower()
+            if "predict" in content:
+                intent["prediction_target"] = msg.get("content", "")[:200]
+                if "churn" in content or "leave" in content or "cancel" in content:
+                    intent["task_type"] = "binary_classification"
+                elif "count" in content or "amount" in content or "revenue" in content:
+                    intent["task_type"] = "regression"
+                break
         
         return intent

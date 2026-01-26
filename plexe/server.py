@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -18,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from plexe.langgraph import PlexeOrchestrator, AgentConfig
+from plexe.langgraph.utils import WebSocketEmitter, MultiEmitter, ConsoleEmitter
 from plexe.api import datasets_router
 
 logger = logging.getLogger(__name__)
@@ -48,10 +50,10 @@ class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, Dict[str, Any]] = {}
     
-    def create_session(self, session_id: str) -> PlexeOrchestrator:
+    def create_session(self, session_id: str, emitter=None) -> PlexeOrchestrator:
         """Create a new session with its own orchestrator."""
         config = AgentConfig.from_env()
-        orchestrator = PlexeOrchestrator(config=config, verbose=True)
+        orchestrator = PlexeOrchestrator(config=config, verbose=True, emitter=emitter)
         self.sessions[session_id] = {
             "orchestrator": orchestrator,
             "working_dir": f"workdir/session-{session_id}",
@@ -94,61 +96,96 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info(f"New WebSocket connection: {session_id}")
 
     loop = asyncio.get_running_loop()
-    orchestrator = session_manager.create_session(session_id)
-    session_data = session_manager.get_session(session_id)
-    working_dir = session_data["working_dir"]
+    
+    ws_emitter = WebSocketEmitter(websocket, loop=loop)
+    console_emitter = ConsoleEmitter()
+    multi_emitter = MultiEmitter([ws_emitter, console_emitter])
+    
+    config = AgentConfig.from_env()
+    
+    def progress_callback(data: Dict[str, Any]):
+        """Callback to send progress updates."""
+        phase = data.get("phase", "")
+        agent = data.get("agent", "")
+        timestamp = data.get("timestamp", "")
+        if phase:
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    websocket.send_json({
+                        "type": "thinking",
+                        "role": "thinking",
+                        "agent_name": agent or "Orchestrator",
+                        "message": f"Starting phase: {phase}",
+                        "step_number": 0,
+                        "timestamp": timestamp or datetime.now().strftime("%H:%M:%S"),
+                    }),
+                    loop
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send progress: {e}")
+    
+    orchestrator = PlexeOrchestrator(
+        config=config, 
+        verbose=True, 
+        callback=progress_callback,
+        emitter=multi_emitter
+    )
+    session_manager.sessions[session_id] = {
+        "orchestrator": orchestrator,
+        "working_dir": f"workdir/session-{session_id}",
+    }
+    working_dir = f"workdir/session-{session_id}"
     
     agent_task = None
     is_closed = False
 
-    async def send_message(msg_type: str, content: Any):
+    async def send_message(msg_type: str, content: Any, agent: str = ""):
         """Send a message to the client."""
         if not is_closed:
             try:
                 await websocket.send_json({
                     "type": msg_type,
                     "content": content,
+                    "agent": agent,
                     "id": str(uuid.uuid4()),
                     "session_id": session_id,
                 })
             except Exception as e:
                 logger.warning(f"Failed to send message: {e}")
 
-    async def send_thought(agent_name: str, thought: str):
-        """Send a thought/progress update to the client."""
-        await send_message("thought", {
-            "agent": agent_name,
-            "message": thought,
-        })
-
     async def run_agent_task(user_message: str, db_connection: Optional[str] = None):
         """Run the orchestrator in a separate thread."""
         nonlocal agent_task
         
         try:
-            await send_thought("system", "Processing your request...")
+            await send_message("thinking", "Processing your request...", "Orchestrator")
             
             def run_sync():
-                session = session_manager.get_session(session_id)
-                if not session:
-                    return {"status": "error", "error": "Session not found"}
-                
-                orch = session["orchestrator"]
-                state = orch.get_session_state(session_id)
-                
-                if state:
-                    return orch.chat(
-                        message=user_message,
-                        session_id=session_id,
-                        working_dir=working_dir,
-                    )
-                else:
-                    return orch.run(
-                        user_message=user_message,
-                        db_connection_string=db_connection,
-                        working_dir=working_dir,
-                        session_id=session_id,
-                    )
+                thread_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(thread_loop)
+                try:
+                    session = session_manager.get_session(session_id)
+                    if not session:
+                        return {"status": "error", "error": "Session not found"}
+                    
+                    orch = session["orchestrator"]
+                    state = orch.get_session_state(session_id)
+                    
+                    if state:
+                        return orch.chat(
+                            message=user_message,
+                            session_id=session_id,
+                            working_dir=working_dir,
+                        )
+                    else:
+                        return orch.run(
+                            user_message=user_message,
+                            db_connection_string=db_connection,
+                            working_dir=working_dir,
+                            session_id=session_id,
+                        )
+                finally:
+                    thread_loop.close()
             
             result = await loop.run_in_executor(None, run_sync)
             

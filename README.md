@@ -1,196 +1,48 @@
-<div align="center">
+# Plexe: Agentic ML Framework with MCP Integration
 
-# plexe ✨
+Plexe là một framework đa tác tử (multi-agent) được xây dựng trên nền tảng **LangGraph**, được thiết kế để tự động hóa toàn bộ quy trình xây dựng mô hình Machine Learning từ ngôn ngữ tự nhiên.
 
-[![PyPI version](https://img.shields.io/pypi/v/plexe.svg)](https://pypi.org/project/plexe/)
-[![Discord](https://img.shields.io/discord/1300920499886358529?logo=discord&logoColor=white)](https://discord.gg/SefZDepGMv)
+Hệ thống đã được nâng cấp với **Model Context Protocol (MCP)** để mở rộng khả năng kết nối với các công cụ học thuật và dữ liệu bên ngoài một cách chuẩn hóa.
 
-<img src="resources/backed-by-yc.png" alt="backed-by-yc" width="20%">
+## 🚀 Các tính năng chính sau điều chỉnh
 
+1.  **Kiến trúc Đa tác tử LangGraph**: Điều phối luồng công việc giữa các Agent chuyên biệt (EDA, Dataset Builder, Task Builder, GNN Specialist).
+2.  **Tích hợp MCP (Model Context Protocol)**:
+    *   **Google Scholar**: Tìm kiếm bài báo khoa học, trích xuất thông tin tác giả trực tiếp qua MCP.
+    *   **Kaggle**: Tìm kiếm và tải xuống tập dữ liệu từ Kaggle API thông qua MCP server.
+    *   **Khả năng mở rộng**: Dễ dàng thêm các MCP server mới chỉ bằng cách cập nhật `mcp_config.json`.
+3.  **Hỗ trợ GPU**: Tối ưu hóa cho việc huấn luyện Graph Neural Networks (GNNs) sử dụng CUDA.
 
-Build machine learning models using natural language.
+## 🏗️ Cấu trúc hệ thống MCP
 
-[Quickstart](#1-quickstart) |
-[Features](#2-features) |
-[Installation](#3-installation) |
-[Documentation](#4-documentation)
+*   `mcp_config.json`: Cấu hình danh sách các MCP server và tham số khởi chạy.
+*   `plexe/langgraph/mcp_manager.py`: Quản lý kết nối, khám phá tools và chuyển đổi MCP tools thành LangChain tools.
+*   `plexe/langgraph/mcp_servers/`: Thư mục chứa các tùy chỉnh MCP server (Scholar, Kaggle).
 
-<br>
+## 🛠️ Cài đặt & Sử dụng
 
-**plexe** lets you create machine learning models by describing them in plain language. Simply explain what you want, 
-and the AI-powered system builds a fully functional model through an automated agentic approach. Also available as a 
-[managed cloud service](https://plexe.ai).
+### 1. Cấu hình biến môi trường
+Tạo file `.env` hoặc cập nhật `docker-compose.gpu.yml` với các thông tin sau:
+```env
+# LLM Keys
+OPENAI_API_KEY=your_key
+GOOGLE_API_KEY=your_key
 
-<br>
+# Kaggle (Bắt buộc cho Kaggle MCP tool)
+KAGGLE_USERNAME=your_username
+KAGGLE_KEY=your_api_key
+```
 
-Watch the demo on YouTube:
-[![Building an ML model with Plexe](resources/demo-thumbnail.png)](https://www.youtube.com/watch?v=bUwCSglhcXY)
-</div>
-
-## 1. Quickstart
-
-### Installation
+### 2. Chạy với Docker
+Sử dụng Docker Compose để khởi chạy toàn bộ hệ thống (bao gồm MLflow, Postgres, và Plexe Backend):
 ```bash
-pip install plexe
+docker compose -f docker-compose.gpu.yml up -d
 ```
 
-### Using plexe
+### 3. Cách thức hoạt động của Agent
+Mọi Agent kế thừa từ `BaseAgent` sẽ tự động tải các tools từ các MCP server được cấu hình trong `mcp_config.json`. Bạn có thể yêu cầu Agent trong Chat UI:
+- *"Tìm các bài báo mới nhất về GNN trên Google Scholar"*
+- *"Tải tập dữ liệu Titanic từ Kaggle và phân tích nó"*
 
-You can use plexe as a Python library to build and train machine learning models:
-
-```python
-import plexe
-
-# Define the model
-model = plexe.Model(
-    intent="Predict sentiment from news articles",
-    input_schema={"headline": str, "content": str},
-    output_schema={"sentiment": str}
-)
-
-# Build and train the model
-model.build(
-    datasets=[your_dataset],
-    provider="openai/gpt-4o-mini",
-    max_iterations=10
-)
-
-# Use the model
-prediction = model.predict({
-    "headline": "New breakthrough in renewable energy",
-    "content": "Scientists announced a major advancement..."
-})
-
-# Save for later use
-plexe.save_model(model, "sentiment-model")
-loaded_model = plexe.load_model("sentiment-model.tar.gz")
-```
-
-## 2. Features
-
-### 2.1. 💬 Natural Language Model Definition
-Define models using plain English descriptions:
-
-```python
-model = plexe.Model(
-    intent="Predict housing prices based on features like size, location, etc.",
-    input_schema={"square_feet": int, "bedrooms": int, "location": str},
-    output_schema={"price": float}
-)
-```
-
-### 2.2. 🤖 Multi-Agent Architecture
-The system uses a team of specialized AI agents to:
-- Analyze your requirements and data
-- Plan the optimal model solution
-- Generate and improve model code
-- Test and evaluate performance
-- Package the model for deployment
-
-### 2.3. 🎯 Automated Model Building
-Build complete models with a single method call:
-
-```python
-model.build(
-    datasets=[dataset_a, dataset_b],
-    provider="openai/gpt-4o-mini",  # LLM provider
-    max_iterations=10,              # Max solutions to explore
-    timeout=1800                    # Optional time limit in seconds
-)
-```
-
-### 2.4. 🚀 Distributed Training with Ray
-
-Plexe supports distributed model training and evaluation with Ray for faster parallel processing:
-
-```python
-from plexe import Model
-
-# Optional: Configure Ray cluster address if using remote Ray
-# from plexe import config
-# config.ray.address = "ray://10.1.2.3:10001"
-
-model = Model(
-    intent="Predict house prices based on various features",
-    distributed=True  # Enable distributed execution
-)
-
-model.build(
-    datasets=[df],
-    provider="openai/gpt-4o-mini"
-)
-```
-
-Ray distributes your workload across available CPU cores, significantly speeding up model generation and evaluation when exploring multiple model variants.
-
-### 2.5. 🎲 Data Generation & Schema Inference
-Generate synthetic data or infer schemas automatically:
-
-```python
-# Generate synthetic data
-dataset = plexe.DatasetGenerator(
-    description="Example dataset with features and target",
-    provider="openai/gpt-4o-mini",
-    schema={"features": str, "target": int}
-)
-dataset.generate(500)  # Generate 500 samples
-
-# Infer schema from intent
-model = plexe.Model(intent="Predict customer churn based on usage patterns")
-model.build(provider="openai/gpt-4o-mini")  # Schema inferred automatically
-```
-
-### 2.6. 🌐 Multi-Provider Support
-Use your preferred LLM provider, for example:
-```python
-model.build(provider="openai/gpt-4o-mini")          # OpenAI
-model.build(provider="anthropic/claude-3-opus")     # Anthropic
-model.build(provider="ollama/llama2")               # Ollama
-model.build(provider="huggingface/meta-llama/...")  # Hugging Face    
-```
-See [LiteLLM providers](https://docs.litellm.ai/docs/providers) for instructions and available providers.
-
-> [!NOTE]
-> Plexe *should* work with most LiteLLM providers, but we actively test only with `openai/*` and `anthropic/*`
-> models. If you encounter issues with other providers, please let us know.
-
-
-## 3. Installation
-
-### 3.1. Installation Options
-```bash
-pip install plexe                  # Standard installation, minimal dependencies
-pip install plexe[transformers]    # Support for transformers, tokenizers, etc
-pip install plexe[chatui]          # Local chat UI for model interaction
-pip install plexe[all]             # All optional dependencies
-```
-
-### 3.2. API Keys
-```bash
-# Set your preferred provider's API key
-export OPENAI_API_KEY=<your-key>
-export ANTHROPIC_API_KEY=<your-key>
-export GEMINI_API_KEY=<your-key>
-```
-See [LiteLLM providers](https://docs.litellm.ai/docs/providers) for environment variable names.
-
-## 4. Documentation
-For full documentation, visit [docs.plexe.ai](https://docs.plexe.ai).
-
-## 5. Contributing
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Join our [Discord](https://discord.gg/SefZDepGMv) to connect with the team.
-
-## 6. License
-[Apache-2.0 License](LICENSE)
-
-## 7. Citation
-If you use Plexe in your research, please cite it as follows:
-
-```bibtex
-@software{plexe2025,
-  author = {De Bernardi, Marcello AND Dubey, Vaibhav},
-  title = {Plexe: Build machine learning models using natural language.},
-  year = {2025},
-  publisher = {GitHub},
-  howpublished = {\url{https://github.com/plexe-ai/plexe}},
-}
+## 📝 Ghi chú cho Docker
+Hệ thống sử dụng `Dockerfile.gpu` dựa trên `pytorch/pytorch:2.7.0-cuda12.8` để đảm bảo hiệu suất huấn luyện mô hình. Các thư viện bổ sung như `scholarly`, `kaggle`, và `mcp[all]` đã được tích hợp sẵn trong quá trình build image.

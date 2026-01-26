@@ -1,10 +1,5 @@
-"""
-Tools for the Task Builder Agent.
-"""
-
 from typing import Dict, Any
 from langchain_core.tools import tool as langchain_tool
-
 
 @langchain_tool
 def test_sql_query(
@@ -23,15 +18,24 @@ def test_sql_query(
     """
     import duckdb
     import os
+    import pandas as pd
     
     try:
         conn = duckdb.connect(':memory:')
         
+        # Load all CSV files as tables
         for f in os.listdir(csv_dir):
             if f.endswith('.csv'):
                 table_name = f.replace('.csv', '')
                 file_path = os.path.join(csv_dir, f)
                 conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM read_csv_auto('{file_path}')")
+        
+        # Create a dummy timestamp_df for testing (will be provided by the task at runtime)
+        # This is just for SQL validation
+        timestamps_dummy = pd.DataFrame({
+            'timestamp': pd.date_range('2020-01-01', periods=3, freq='D')
+        })
+        conn.register("timestamp_df", timestamps_dummy)
         
         result = conn.execute(query).fetchdf()
         

@@ -16,134 +16,9 @@ from plexe.langgraph.state import PipelineState, PipelinePhase
 from plexe.langgraph.tools.common import save_artifact
 from plexe.langgraph.tools.dataset_builder import get_csv_files_info
 from plexe.langgraph.tools.task_builder import test_sql_query, register_task_code
+from plexe.langgraph.prompts.task_builder import TASK_BUILDER_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
-
-
-TASK_BUILDER_SYSTEM_PROMPT = """You are the Task Builder Agent, an expert in defining prediction tasks for relational databases.
-
-## Your Mission
-Create a Python Task class (GenTask) that defines:
-1. The prediction target and entity
-2. SQL queries to compute labels from historical data
-3. Proper temporal windows for train/val/test splits
-4. Evaluation metrics for the task
-
-## Workflow
-
-### Step 1: Understand the Prediction Task
-Based on the user's intent, determine:
-- Entity table (e.g., users, drivers, products)
-- Target variable (e.g., churn, engagement, sales)
-- Task type (e.g., regression, binary_classification, multiclass_classification)
-
-### Step 2: Design SQL Query
-Create a SQL query that:
-- Uses temporal windows to prevent data leakage
-- Computes labels from future data relative to timestamp
-- Filters to relevant entities
-
-### Step 3: Test the SQL Query
-Use test_sql_query to validate your query works correctly.
-
-### Step 4: Generate Task Code
-Create a complete GenTask class:
-
-```python
-import pandas as pd
-from plexe.relbench.base import EntityTask, RecommendationTask
-from plexe.relbench.metrics import accuracy, mae, rmse, f1, auroc
-
-class GenTask(EntityTask):  # or RecommendationTask
-    entity_table = "entity_table_name"
-    entity_col = "entity_id_column"
-    time_col = "timestamp"
-    target_col = "target"
-    task_type = "regression"  # or binary_classification, multiclass_classification
-    timedelta = pd.Timedelta(days=30)
-    metrics = [mae, rmse]  # appropriate metrics
-
-    def make_table(self, db, timestamps):
-        # SQL query using DuckDB
-        query = '''
-        SELECT
-            t.timestamp as {time_col},
-            e.{entity_col},
-            -- aggregation to compute target
-        FROM timestamp_df t
-        LEFT JOIN {entity_table} e ON ...
-        LEFT JOIN {activity_table} a ON ...
-        WHERE temporal_filter
-        GROUP BY t.timestamp, e.{entity_col}
-        '''
-        
-        import duckdb
-        conn = duckdb.connect()
-        # Register tables from db
-        for table_name, table in db.table_dict.items():
-            conn.register(table_name, table.df)
-        conn.register("timestamp_df", timestamps)
-        
-        df = conn.execute(query).fetchdf()
-        return df
-```
-
-### Step 5: Register the Code
-Use register_task_code to save the generated code.
-
-## SQL Query Patterns
-
-### Binary Classification (Churn-style)
-```sql
-SELECT t.timestamp as timestamp, e.user_id,
-       CASE WHEN NOT EXISTS (
-           SELECT 1 FROM activity a
-           WHERE a.user_id = e.user_id
-           AND a.time > t.timestamp
-           AND a.time <= t.timestamp + INTERVAL '{timedelta}'
-       ) THEN 1 ELSE 0 END as target
-FROM timestamp_df t, users e
-WHERE e.created_at <= t.timestamp
-```
-
-### Regression (Count-style)
-```sql
-SELECT t.timestamp, e.entity_id,
-       COUNT(a.id) as target
-FROM timestamp_df t
-CROSS JOIN entities e
-LEFT JOIN activities a ON a.entity_id = e.id
-    AND a.time > t.timestamp
-    AND a.time <= t.timestamp + INTERVAL '{timedelta}'
-WHERE e.created_at <= t.timestamp
-GROUP BY t.timestamp, e.entity_id
-```
-
-### Classification (Threshold-style)
-```sql
-SELECT t.timestamp, e.entity_id,
-       CASE WHEN MIN(a.position) <= 3 THEN 1 ELSE 0 END as target
-FROM timestamp_df t
-LEFT JOIN results a ON a.entity_id = e.id
-    AND a.time > t.timestamp
-    AND a.time <= t.timestamp + INTERVAL '{timedelta}'
-WHERE e.id IN (SELECT DISTINCT entity_id FROM results WHERE time > t.timestamp - INTERVAL '1 year')
-GROUP BY t.timestamp, e.entity_id
-```
-
-## Available Metrics
-- Regression: mae, rmse, r2
-- Binary Classification: accuracy, f1, auroc, average_precision
-- Multiclass Classification: accuracy, f1_macro, f1_micro
-
-## Important
-- Use class name 'GenTask'
-- Always test SQL before finalizing
-- Use exact column names from the database (snake_case)
-- Ensure temporal windows prevent data leakage
-- Save as 'task.py' in the working directory
-"""
-
 
 class TaskBuilderAgent(BaseAgent):
     """Agent for building RelBench Task classes."""
@@ -153,13 +28,6 @@ class TaskBuilderAgent(BaseAgent):
         config: Optional[AgentConfig] = None,
         additional_tools: Optional[List[BaseTool]] = None,
     ):
-        """
-        Initialize the task builder agent.
-        
-        Args:
-            config: Agent configuration
-            additional_tools: Additional tools beyond defaults
-        """
         tools = [
             get_csv_files_info,
             test_sql_query,
@@ -181,40 +49,74 @@ class TaskBuilderAgent(BaseAgent):
         return TASK_BUILDER_SYSTEM_PROMPT
     
     def _build_context(self, state: PipelineState) -> str:
-        """Build context with task-specific information including EDA results."""
+        """Build context with task-specific information."""
         context_parts = []
         
         if state.get("working_dir"):
             context_parts.append(f"Working directory: {state['working_dir']}")
         
         if state.get("csv_dir"):
-            context_parts.append(f"CSV files directory: {state['csv_dir']}")
+            context_parts.append(f"CSV directory: {state['csv_dir']}")
         
+        # User intent analysis
         if state.get("user_intent"):
-            context_parts.append(f"User intent: {state['user_intent']}")
+            intent = state["user_intent"]
+            context_parts.append("\n## User Intent:")
+            if isinstance(intent, dict):
+                pred_target = intent.get('prediction_target', 'unknown')
+                task_type = intent.get('task_type', 'unknown')
+                context_parts.append(f"  - Prediction target: {pred_target}")
+                context_parts.append(f"  - Task type: {task_type}")
+                
+                # Suggest appropriate metrics
+                if 'binary' in str(task_type).lower() or 'classification' in str(task_type).lower():
+                    context_parts.append(f"  - Suggested metrics: average_precision, accuracy, f1, roc_auc")
+                elif 'regression' in str(task_type).lower():
+                    context_parts.append(f"  - Suggested metrics: mae, rmse, r2")
+                elif 'link' in str(task_type).lower() or 'recommendation' in str(task_type).lower():
+                    context_parts.append(f"  - Suggested metrics: link_prediction_map, link_prediction_precision, link_prediction_recall")
+                    context_parts.append(f"  - Use RecommendationTask base class with eval_k parameter")
+            else:
+                context_parts.append(f"  - Intent: {intent}")
         
+        # Schema information
         if state.get("schema_info"):
             schema = state["schema_info"]
+            context_parts.append("\n## Schema Information:")
             tables = list(schema.get("tables", {}).keys())
             context_parts.append(f"Available tables: {', '.join(tables)}")
             
+            context_parts.append("\nTable Details:")
             for table_name, table_info in schema.get("tables", {}).items():
+                columns = table_info.get("columns", [])
                 pk = table_info.get("primary_key", [])
+                context_parts.append(f"  - {table_name}:")
+                context_parts.append(f"    * Columns: {', '.join([c['name'] for c in columns[:10]])}")
                 if pk:
-                    context_parts.append(f"  {table_name} PK: {pk}")
+                    context_parts.append(f"    * Primary Key: {pk}")
+            
+            # Foreign key relationships
+            if schema.get("relationships"):
+                context_parts.append("\nForeign Key Relationships:")
+                for rel in schema["relationships"]:
+                    context_parts.append(
+                        f"  - {rel['source_table']}.{rel['source_column']} -> {rel['target_table']}.{rel['target_column']}"
+                    )
         
+        # Dataset information
         if state.get("dataset_info"):
             ds = state["dataset_info"]
-            context_parts.append(f"Dataset class: {ds.get('class_name')}")
+            context_parts.append("\n## Dataset Information:")
+            context_parts.append(f"  - Class: {ds.get('class_name')}")
             if ds.get("val_timestamp"):
-                context_parts.append(f"Val timestamp: {ds.get('val_timestamp')}")
+                context_parts.append(f"  - Validation timestamp: {ds.get('val_timestamp')}")
             if ds.get("test_timestamp"):
-                context_parts.append(f"Test timestamp: {ds.get('test_timestamp')}")
+                context_parts.append(f"  - Test timestamp: {ds.get('test_timestamp')}")
         
-        # Include EDA information for better task design
+        # EDA insights
         if state.get("eda_info"):
             eda = state["eda_info"]
-            context_parts.append("\n## EDA Analysis Results:")
+            context_parts.append("\n## EDA Analysis:")
             
             if eda.get("statistics"):
                 context_parts.append("Table Statistics:")
@@ -224,64 +126,76 @@ class TaskBuilderAgent(BaseAgent):
                         context_parts.append(f"  - {table}: {row_count} rows")
             
             if eda.get("temporal_analysis"):
-                context_parts.append("Temporal Analysis:")
+                context_parts.append("\nTemporal Analysis:")
                 for table, analysis in eda["temporal_analysis"].items():
                     if analysis.get("time_columns"):
-                        context_parts.append(f"  - {table}: time columns = {analysis['time_columns']}")
-                    if analysis.get("date_range"):
-                        context_parts.append(f"    Date range: {analysis['date_range']}")
+                        cols = analysis['time_columns']
+                        context_parts.append(f"  - {table} time columns: {cols}")
+                        # Add time range info if available
+                        for col_name, col_info in cols.items():
+                            if isinstance(col_info, dict):
+                                min_date = col_info.get('min')
+                                max_date = col_info.get('max')
+                                if min_date and max_date:
+                                    context_parts.append(f"    * {col_name}: {min_date} to {max_date}")
             
-            if eda.get("relationship_analysis"):
-                context_parts.append("Relationship Analysis:")
-                for key, info in eda["relationship_analysis"].items():
-                    if isinstance(info, dict):
-                        if info.get("cardinality"):
-                            context_parts.append(f"  - {key}: {info['cardinality']}")
-                        if info.get("join_quality"):
-                            context_parts.append(f"    Join quality: {info['join_quality']}")
-            
-            if eda.get("summary"):
-                context_parts.append(f"\nEDA Summary: {eda['summary']}")
+            # Suggest timedelta based on temporal data
+            if eda.get("suggested_timedelta"):
+                context_parts.append(f"\nSuggested prediction window: {eda.get('suggested_timedelta')}")
         
-        task_instruction = """
-Your task:
-1. Analyze the schema and user intent
-2. Use EDA insights to understand data patterns and relationships
-3. Design a SQL query for label computation
-4. Test the SQL query using test_sql_query
-5. Generate a complete GenTask class
-6. Register the code using register_task_code
+        # Task generation instructions
+        working_dir = state.get('working_dir', '')
+        csv_dir = state.get('csv_dir', '')
+        
+        context_parts.append(f"""
+## Your Task:
+1. Determine if this is an EntityTask or RecommendationTask based on user intent
+2. Identify the entity table and entity column (or src/dst for recommendations)
+3. Determine appropriate time_col (from temporal analysis)
+4. Design SQL query with proper temporal filtering to compute target labels
+5. Choose appropriate metrics based on task type
+6. Estimate reasonable timedelta (prediction window) based on temporal data range
+7. Set num_eval_timestamps (default 20, adjust based on data frequency)
+8. For link prediction: set eval_k (typical: 10-12)
+9. Test your SQL: test_sql_query("{csv_dir}", query)
+10. Generate complete code and save: register_task_code(code, "GenTask", "{working_dir}/task.py", task_type)
 
-The output file should be saved as 'task.py' in the working directory.
-"""
-        context_parts.append(task_instruction)
+CRITICAL REMINDERS:
+- Use TaskType enum: TaskType.BINARY_CLASSIFICATION, TaskType.REGRESSION, TaskType.LINK_PREDICTION
+- Import correct base class: EntityTask or RecommendationTask
+- Import only metrics you use from plexe.relbench.metrics
+- Convert timestamps: timestamp_df = pd.DataFrame({{"timestamp": timestamps}})
+- Use duckdb.sql() method, not conn.execute()
+- Return Table object with proper fkey_col_to_pkey_table mapping
+""")
         
         return "\n".join(context_parts)
     
     def _process_result(self, result: Dict[str, Any], state: PipelineState) -> Dict[str, Any]:
-        """Process result and extract task information from tool calls."""
+        """Process result and extract task information."""
         base_result = super()._process_result(result, state)
         
         task_info = {}
         generated_code = state.get("generated_code", {})
+        working_dir = state.get("working_dir", "")
         
-        if "tool_calls" in result and result["tool_calls"]:
-            for tool_call in result["tool_calls"]:
-                tool_name = tool_call.get("name", "")
-                tool_result = tool_call.get("result", {})
-                
-                if tool_name == "register_task_code" and tool_result.get("status") == "registered":
-                    task_info["class_name"] = tool_result.get("class_name", "GenTask")
-                    task_info["file_path"] = tool_result.get("file_path")
-                    task_info["task_type"] = tool_result.get("task_type")
-                    if "code" in tool_result:
-                        generated_code["task"] = tool_result["code"]
+        task_path = os.path.join(working_dir, "task.py")
+        if os.path.exists(task_path):
+            task_info["class_name"] = "GenTask"
+            task_info["file_path"] = task_path
+            
+            intent = state.get("user_intent", {})
+            if isinstance(intent, dict):
+                task_info["task_type"] = intent.get("task_type", "binary_classification")
+            else:
+                task_info["task_type"] = "binary_classification"
         
         if not task_info:
             task_info["class_name"] = "GenTask"
+            task_info["file_path"] = task_path
+            task_info["task_type"] = "binary_classification"
         
-        if task_info:
-            base_result["task_info"] = task_info
+        base_result["task_info"] = task_info
         
         if generated_code:
             base_result["generated_code"] = generated_code

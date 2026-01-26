@@ -44,7 +44,8 @@ RUN uv pip install \
         litellm statsmodels hypothesis "numpy<2.0.0" black jinja2 platformdirs \
         "ray>=2.9.0" rich smolagents deprecated python-multipart psycopg2-binary \
         featuretools sqlalchemy pytorch-frame pooch duckdb scipy \
-        fastapi "uvicorn[standard]" websockets langgraph langchain langchain-openai langchain-google-genai angchain-anthropic
+        fastapi "uvicorn[standard]" websockets langgraph langchain langchain-openai langchain-google-genai langchain-anthropic \
+        requests openml scholarly kaggle "mcp[all]" nest_asyncio
  
 # ----------------------------
 # BƯỚC 3: Cài torchvision, torchaudio (torch đã có sẵn từ base image)
@@ -91,7 +92,7 @@ import sentence_transformers
 print("sentence-transformers:", sentence_transformers.__version__)
 import mlflow
 print("MLflow:", mlflow.__version__)
-from plexe import Model, PlexeOrchestrator
+from plexe import PlexeOrchestrator
 print("plexe import OK")
 from plexe.langgraph import EDAAgent, ConversationalAgent
 print("LangGraph agents OK")

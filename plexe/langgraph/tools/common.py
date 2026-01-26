@@ -1,10 +1,5 @@
-"""
-Common tools shared across multiple agents.
-"""
-
 from typing import Dict
 from langchain_core.tools import tool as langchain_tool
-
 
 @langchain_tool
 def save_artifact(

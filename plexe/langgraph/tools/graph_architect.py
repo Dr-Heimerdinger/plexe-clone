@@ -1,10 +1,5 @@
-"""
-Tools for the Graph Architect Agent.
-"""
-
 from typing import Dict, Any, List, Optional
 from langchain_core.tools import tool as langchain_tool
-
 
 @langchain_tool
 def validate_db_connection(connection_string: str) -> Dict[str, Any]:
